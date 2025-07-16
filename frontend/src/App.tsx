@@ -1,26 +1,30 @@
-import { Container, Title, Paper, Stack, Divider } from '@mantine/core';
+import { Container, Title, Stack, SimpleGrid } from '@mantine/core';
 import { ConnectionStatus } from './components/ConnectionStatus';
+import { SpeedControl } from './components/SpeedControl';
 
 function App() {
     return (
-        <Container size="sm" mt="xl">
+        <Container size="xl" my="xl">
             <Stack>
-                <Paper withBorder shadow="md" p="md" radius="md">
-                    <Stack>
-                        <Title order={2}>Cihaz Kontrol Paneli</Title>
-                        <ConnectionStatus />
-                    </Stack>
-                </Paper>
+                <Title order={1}>FUE Motor Kontrol Arayüzü</Title>
 
-                <Paper withBorder shadow="md" p="md" radius="md">
-                    <Title order={3} mb="md">Motor Kontrolleri</Title>
-                    <Divider my="sm" />
-                    {/* Diğer kontrol bileşenleri (Hız, Açı vb.) buraya gelecek */}
-                    <p>Hız kontrolü ve diğer ayarlar bu alanda yer alacak.</p>
-                </Paper>
+                {/* Ana yerleşim için Grid sistemi */}
+                <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">
+                    {/* SOL SÜTUN (Ayarlar ve Durum) */}
+                    <Stack>
+                        <ConnectionStatus />
+                        {/* Diğer ayar kartları buraya gelebilir */}
+                    </Stack>
+
+                    {/* SAĞ SÜTUN (Ana Kontroller - 2 birimlik yer kaplar) */}
+                    <Stack style={{ gridColumn: 'span 2' }}>
+                        <SpeedControl />
+                        {/* Diğer ana kontrol kartları (Açı, Mod vb.) buraya gelecek */}
+                    </Stack>
+                </SimpleGrid>
             </Stack>
         </Container>
-    )
+    );
 }
 
 export default App
