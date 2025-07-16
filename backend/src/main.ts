@@ -1,20 +1,17 @@
 import { MockCommunicationService } from './services/MockCommunicationService';
+import { WebSocketServer } from './services/WebSocketServer';
 
-console.log("Uygulama başlatılıyor...");
+console.log("Sunucu altyapısı başlatılıyor...");
 
-// Sahte servisimizi oluşturuyoruz
+// 1. İletişim servisimizi oluşturuyoruz (şimdilik sahte olanı).
 const commService = new MockCommunicationService();
 
-// Servisten 'data' olayı geldiğinde ne yapacağımızı belirtiyoruz
-commService.on('data', (data) => {
-    console.log(`--> ANA UYGULAMA VERİ ALDI: ${data.toString()}`);
-});
+// 2. WebSocket sunucumuzu oluşturuyoruz ve hangi iletişim servisini
+//    kullanacağını ona söylüyoruz.
+const wsServer = new WebSocketServer(commService);
 
-// Servisi başlatıyoruz
+// 3. Her iki servisi de başlatıyoruz.
 commService.start();
+wsServer.start();
 
-// Her 3 saniyede bir sahte komut göndererek servisi test edelim
-setInterval(() => {
-    const randomSpeed = Math.floor(Math.random() * 4000) + 1000;
-    commService.sendCommand(`h${randomSpeed}`);
-}, 3000);
+console.log("Uygulama başarıyla çalışıyor. İstemci bağlantısı bekleniyor...");
