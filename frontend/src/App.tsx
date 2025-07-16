@@ -1,35 +1,36 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useWebSocketStore } from './stores/useWebSocketStore';
 
 function App() {
-  const [count, setCount] = useState(0)
+    // Store'dan gerekli state'leri ve fonksiyonları çekiyoruz.
+    const { isConnected, lastMessage, connect, disconnect, sendMessage } = useWebSocketStore();
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    const handleConnect = () => {
+        // Backend sunucumuzun adresini veriyoruz.
+        connect('ws://localhost:8080');
+    };
+
+    const handleSendCommand = () => {
+        sendMessage({ type: 'COMMAND', payload: 'h1234' });
+    };
+
+    return (
+        <div>
+            <h1>FUE Kontrol Arayüzü</h1>
+            <div>
+                <h2>Bağlantı Kontrolü</h2>
+                <p>Durum: {isConnected ? <b style={{color: 'green'}}>Bağlı</b> : <b style={{color: 'red'}}>Bağlı Değil</b>}</p>
+                <button onClick={handleConnect} disabled={isConnected}>Bağlan</button>
+                <button onClick={disconnect} disabled={!isConnected}>Bağlantıyı Kes</button>
+            </div>
+
+            <div>
+                <h2>Test</h2>
+                <button onClick={handleSendCommand} disabled={!isConnected}>Test Komutu Gönder</button>
+                <p>Sunucudan Gelen Son Mesaj:</p>
+                <pre>{JSON.stringify(lastMessage, null, 2)}</pre>
+            </div>
+        </div>
+    )
 }
 
 export default App
