@@ -2,7 +2,9 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import { MantineProvider,createTheme  } from '@mantine/core'; // Mantine'ı import et
+import { Notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css'; // Mantine stillerini import et
+import '@mantine/notifications/styles.css';
 
 // Kendi özel temamızı oluşturuyoruz
 const theme = createTheme({
@@ -34,6 +36,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
         {/* Tüm uygulamayı MantineProvider ile sarmalıyoruz */}
         <MantineProvider defaultColorScheme="dark" theme={theme}>
+            {/* Bildirimlerin çalışması için bu sarmalayıcıyı ekliyoruz */}
+            <Notifications position="top-right" />
             <App />
         </MantineProvider>
     </React.StrictMode>,
