@@ -12,5 +12,9 @@
   },
   "api": {
     "port": 8080
-  }
+  },
+  "modes": [
+    { "id": "s1", "name": "Continuous Mode" },
+    { "id": "s2", "name": "Oscillation Mode" }
+  ]
 }
