@@ -5,15 +5,21 @@ interface WebSocketState {
     socket: WebSocket | null;
     isConnected: boolean;
     lastMessage: any | null;
+    isMeasuringTorque: boolean; // YENİ: Tork ölçüm durumu
+    torqueData: { name: number, value: number }[]; // YENİ: Grafik için veri dizisi
     connect: (url: string) => void;
     disconnect: () => void;
     sendMessage: (message: object) => void;
+    startTorqueMeasurement: () => void; // YENİ
+    stopTorqueMeasurement: () => void;  // YENİ
 }
 
 export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     socket: null,
     isConnected: false,
     lastMessage: null,
+    isMeasuringTorque: false,
+    torqueData: [],
 
     // Bağlantı kuran ana fonksiyon
     connect: (url) => {
@@ -36,6 +42,16 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
             const message = JSON.parse(event.data);
             console.log('Sunucudan mesaj alındı:', message);
             set({ lastMessage: message });
+
+            // YENİ: Gelen mesaj tork güncellemesi ise...
+            if (message.type === 'TORQUE_UPDATE') {
+                set((state) => {
+                    const newDataPoint = { name: state.torqueData.length + 1, value: message.payload };
+                    // Grafiğin sonsuza dek büyümemesi için son 100 veriyi tutalım
+                    const newTorqueData = [...state.torqueData, newDataPoint].slice(-100);
+                    return { torqueData: newTorqueData };
+                });
+            }
         };
 
         socket.onerror = (error) => {
@@ -51,5 +67,16 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     // Sunucuya mesaj gönderen fonksiyon
     sendMessage: (message) => {
         get().socket?.send(JSON.stringify(message));
-    }
+    },
+
+    // YENİ FONKSİYONLAR
+    startTorqueMeasurement: () => {
+        // Ölçüme başlamadan önce eski verileri temizle
+        set({ isMeasuringTorque: true, torqueData: [] });
+        get().sendMessage({ type: 'COMMAND', payload: 'i' });
+    },
+    stopTorqueMeasurement: () => {
+        set({ isMeasuringTorque: false });
+        get().sendMessage({ type: 'COMMAND', payload: 'c' });
+    },
 }));

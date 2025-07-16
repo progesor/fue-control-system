@@ -3,6 +3,7 @@ import { ConnectionStatus } from './components/ConnectionStatus';
 import { SpeedControl } from './components/SpeedControl';
 import { ModeControl } from './components/ModeControl';
 import { AngleControl } from './components/AngleControl';
+import { TorqueMonitor } from './components/TorqueMonitor';
 
 function App() {
     return (
@@ -23,6 +24,7 @@ function App() {
                         <SpeedControl />
                         <ModeControl />
                         <AngleControl/>
+                        <TorqueMonitor/>
                         {/* Diğer ana kontrol kartları (Açı, Mod vb.) buraya gelecek */}
                     </Stack>
                 </SimpleGrid>

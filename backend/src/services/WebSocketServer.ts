@@ -22,6 +22,11 @@ export class WebSocketServer {
             this.broadcast({ type: 'DEVICE_RESPONSE', payload: data.toString() });
         });
 
+        // YENİ: İletişim servisimizden tork verisi geldiğinde...
+        this.commService.on('torque_data', (data) => {
+            this.broadcast({ type: 'TORQUE_UPDATE', payload: data });
+        });
+
         // Yeni bir istemci (React arayüzü) bağlandığında...
         this.wss.on('connection', (ws: WebSocket) => {
             console.log('Yeni bir istemci bağlandı.');

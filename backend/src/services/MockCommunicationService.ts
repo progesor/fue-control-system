@@ -4,6 +4,7 @@ import config from '../../config.json'; // config.json dosyamızı import ediyor
 
 export class MockCommunicationService extends EventEmitter implements ICommunicationService {
     private isRunning = false;
+    private torqueInterval: NodeJS.Timeout | null = null; // Tork interval'ını tutmak için yeni değişken
 
     constructor() {
         super(); // EventEmitter'ın constructor'ını çağırıyoruz
@@ -18,6 +19,9 @@ export class MockCommunicationService extends EventEmitter implements ICommunica
     async stop(): Promise<void> {
         console.log("Mock İletişim Servisi Durduruldu.");
         this.isRunning = false;
+        if (this.torqueInterval) {
+            clearInterval(this.torqueInterval); // Servis durursa tork ölçümünü de durdur
+        }
         // Gerçek serviste burada seri port bağlantısı kapatılır.
     }
 
@@ -28,6 +32,20 @@ export class MockCommunicationService extends EventEmitter implements ICommunica
         }
 
         console.log(`SAHTE CİHAZA GÖNDERİLEN KOMUT: ${command}`);
+
+        // Tork başlatma komutu
+        if (command === 'i') {
+            this.emit('data', 'o'); // 'i' komutuna 'o' ile cevap ver
+            this.startTorqueStream();
+            return;
+        }
+
+        // Tork durdurma komutu
+        if (command === 'c') {
+            this.stopTorqueStream();
+            this.emit('data', 'o'); // 'c' komutuna da 'o' ile cevap ver
+            return;
+        }
 
         // config.json'dan okuduğumuz gecikme süresi kadar bekleyip cevap veriyoruz.
         setTimeout(() => {
@@ -40,5 +58,26 @@ export class MockCommunicationService extends EventEmitter implements ICommunica
             this.emit('data', response);
 
         }, config.simulationData.responseDelayMs);
+    }
+
+    // Tork veri akışını başlatan YENİ fonksiyon
+    private startTorqueStream(): void {
+        if (this.torqueInterval) return; // Zaten çalışıyorsa tekrar başlatma
+        console.log('Tork ölçümü başlatıldı.');
+        this.torqueInterval = setInterval(() => {
+            // 0-255 arası rastgele bir byte değeri üretelim
+            const torqueValue = Math.floor(Math.random() * 256);
+            // 'data' yerine 'torque_data' adında özel bir olay yayınlayalım
+            this.emit('torque_data', torqueValue);
+        }, config.simulationData.torqueIntervalMs);
+    }
+
+    // Tork veri akışını durduran YENİ fonksiyon
+    private stopTorqueStream(): void {
+        if (this.torqueInterval) {
+            console.log('Tork ölçümü durduruldu.');
+            clearInterval(this.torqueInterval);
+            this.torqueInterval = null;
+        }
     }
 }
