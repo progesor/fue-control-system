@@ -2,6 +2,7 @@ import { Container, Title, Stack, SimpleGrid } from '@mantine/core';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { SpeedControl } from './components/SpeedControl';
 import { ModeControl } from './components/ModeControl';
+import { AngleControl } from './components/AngleControl';
 
 function App() {
     return (
@@ -21,6 +22,7 @@ function App() {
                     <Stack style={{ gridColumn: 'span 2' }}>
                         <SpeedControl />
                         <ModeControl />
+                        <AngleControl/>
                         {/* Diğer ana kontrol kartları (Açı, Mod vb.) buraya gelecek */}
                     </Stack>
                 </SimpleGrid>
