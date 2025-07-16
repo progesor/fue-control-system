@@ -1,35 +1,25 @@
-import { useWebSocketStore } from './stores/useWebSocketStore';
+import { Container, Title, Paper, Stack, Divider } from '@mantine/core';
+import { ConnectionStatus } from './components/ConnectionStatus';
 
 function App() {
-    // Store'dan gerekli state'leri ve fonksiyonları çekiyoruz.
-    const { isConnected, lastMessage, connect, disconnect, sendMessage } = useWebSocketStore();
-
-    const handleConnect = () => {
-        // Backend sunucumuzun adresini veriyoruz.
-        connect('ws://localhost:8080');
-    };
-
-    const handleSendCommand = () => {
-        sendMessage({ type: 'COMMAND', payload: 'h1234' });
-    };
-
     return (
-        <div>
-            <h1>FUE Kontrol Arayüzü</h1>
-            <div>
-                <h2>Bağlantı Kontrolü</h2>
-                <p>Durum: {isConnected ? <b style={{color: 'green'}}>Bağlı</b> : <b style={{color: 'red'}}>Bağlı Değil</b>}</p>
-                <button onClick={handleConnect} disabled={isConnected}>Bağlan</button>
-                <button onClick={disconnect} disabled={!isConnected}>Bağlantıyı Kes</button>
-            </div>
+        <Container size="sm" mt="xl">
+            <Stack>
+                <Paper withBorder shadow="md" p="md" radius="md">
+                    <Stack>
+                        <Title order={2}>Cihaz Kontrol Paneli</Title>
+                        <ConnectionStatus />
+                    </Stack>
+                </Paper>
 
-            <div>
-                <h2>Test</h2>
-                <button onClick={handleSendCommand} disabled={!isConnected}>Test Komutu Gönder</button>
-                <p>Sunucudan Gelen Son Mesaj:</p>
-                <pre>{JSON.stringify(lastMessage, null, 2)}</pre>
-            </div>
-        </div>
+                <Paper withBorder shadow="md" p="md" radius="md">
+                    <Title order={3} mb="md">Motor Kontrolleri</Title>
+                    <Divider my="sm" />
+                    {/* Diğer kontrol bileşenleri (Hız, Açı vb.) buraya gelecek */}
+                    <p>Hız kontrolü ve diğer ayarlar bu alanda yer alacak.</p>
+                </Paper>
+            </Stack>
+        </Container>
     )
 }
 
