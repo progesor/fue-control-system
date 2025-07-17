@@ -11,6 +11,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "i2c-bus": "^5.2.3",
+    "pca9685": "^5.0.0",
     "serialport": "^13.0.0",
     "ws": "^8.18.3"
   },
