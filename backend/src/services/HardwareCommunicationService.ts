@@ -5,152 +5,162 @@ import { EventEmitter } from 'events';
 import { Pca9685Driver } from 'pca9685';
 import i2c from 'i2c-bus';
 
-// Constants for motor control pins
-const MOTOR_A_PINS = { IN1: 0, IN2: 1, PWM: 2 };
-// A short braking period (in ms) to allow the motor to stop before reversing
+// --- KALİBRASYON ve AYARLAR ---
+const MAX_RPM_AT_FULL_POWER = 10000;
 const BRAKE_DURATION_MS = 20;
+
+const MOTOR_A_PINS = { IN1: 0, IN2: 1, PWM: 2 };
 
 export class HardwareCommunicationService extends EventEmitter implements ICommunicationService {
     private pwm?: Pca9685Driver;
     private isRunning = false;
     private isInitialized = false;
     private isSequenceRunning = false;
-    private sequenceTimer: NodeJS.Timeout | null = null;
 
     constructor() {
         super();
         try {
             const i2cBus = i2c.openSync(1);
             this.pwm = new Pca9685Driver({ i2c: i2cBus, address: 0x40, frequency: 1600 }, (err) => {
+                this.isInitialized = !err;
                 if (err) {
                     console.error("PCA9685 başlatılırken hata oluştu.", err);
-                    this.isInitialized = false;
                 } else {
                     console.log("PCA9685 başarıyla başlatıldı.");
-                    this.isInitialized = true;
                     this.setMotorDirection('stop');
                 }
             });
         } catch (error) {
             console.error("I2C bus açılamadı!", error);
-            this.isInitialized = false;
         }
     }
 
     public async start(): Promise<void> { this.isRunning = true; }
     public async stop(): Promise<void> { this.stopSequence(); this.isRunning = false; }
-    public sendCommand(command: string): void { /* This can remain as is */ }
+    public sendCommand(command: string): void { /* eski haliyle kalabilir */ }
 
+    // --- YENİ ve DAHA SAĞLAM REÇETE MOTORU ---
     public async executeSequence(sequence: any[]): Promise<void> {
-        if (this.isSequenceRunning) return;
+        if (this.isSequenceRunning) {
+            console.warn("Mevcut bir dizi zaten çalışıyor, yeni istek reddedildi.");
+            return;
+        }
         this.isSequenceRunning = true;
         console.log("Komut dizisi yürütülmeye başlandı.");
 
-        for (const command of sequence) {
-            if (!this.isSequenceRunning) break;
-            console.log(`Yürütülüyor: ${command.type} | Süre: ${command.duration}ms`);
-            try {
+        try {
+            for (const command of sequence) {
+                // Her döngünün başında durdurma komutu gelip gelmediğini kontrol et
+                if (!this.isSequenceRunning) {
+                    throw new Error("Sequence stopped by user");
+                }
+
+                console.log(`Yürütülüyor: ${command.type}`);
+
                 switch (command.type) {
                     case 'FORWARD':
                         await this.runForward(command.power, command.duration);
                         break;
                     case 'OSCILLATE':
-                        // A slower period for distinct back-and-forth movement
-                        await this.runPeriodicMovement(command.power, command.duration, 75);
+                        await this.runAngleOscillation(command.power, command.angle, command.duration);
                         break;
                     case 'VIBRATE':
-                        // A very fast period for vibration
-                        await this.runPeriodicMovement(command.power, command.duration, 25);
+                        await this.runVibration(command.power, command.duration);
                         break;
                     case 'PAUSE':
                         await this.runPause(command.duration);
                         break;
-                }
-            } catch (error) {
-                if (error instanceof Error && error.message === "Sequence stopped") {
-                    console.log("Dizi durduruldu.");
-                    break;
+                    default:
+                        console.warn(`Bilinmeyen komut tipi: ${command.type}`);
+                        break;
                 }
             }
+            console.log("Komut dizisi başarıyla tamamlandı.");
+        } catch (error) {
+            if (error instanceof Error && error.message === 'Sequence stopped by user') {
+                console.log("Komut dizisi kullanıcı tarafından durduruldu.");
+            } else {
+                console.error("Dizi yürütülürken bir hata oluştu:", error);
+            }
+        } finally {
+            // Ne olursa olsun, dizi bittiğinde motoru durdur ve flag'i sıfırla.
+            this.setMotorDirection('stop');
+            this.isSequenceRunning = false;
         }
-
-        console.log("Komut dizisi tamamlandı.");
-        this.setMotorDirection('stop');
-        this.isSequenceRunning = false;
     }
 
     public stopSequence(): void {
+        console.log("Durdurma komutu alındı.");
         this.isSequenceRunning = false;
-        if (this.sequenceTimer) {
-            clearTimeout(this.sequenceTimer);
-            this.sequenceTimer = null;
+    }
+
+    // --- Hareket Stratejileri ---
+
+    private utilDelay(ms: number): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => resolve(), ms);
+            // Durdurma komutu geldiğinde beklemenin anında iptal edilmesi için
+            // bir kontrol mekanizması.
+            const checkStop = setInterval(() => {
+                if (!this.isSequenceRunning) {
+                    clearTimeout(timer);
+                    clearInterval(checkStop);
+                    reject(new Error("Sequence stopped by user"));
+                }
+            }, 10); // 10ms'de bir kontrol et
+        });
+    }
+
+    private async runForward(power: number, duration: number): Promise<void> {
+        this.setMotorDirection('forward');
+        this.setMotorSpeedPWM(power / 100);
+        await this.utilDelay(duration);
+    }
+
+    private async runPause(duration: number): Promise<void> {
+        this.setMotorDirection('stop');
+        await this.utilDelay(duration);
+    }
+
+    private runVibration(power: number, duration: number): Promise<void> {
+        return this.runPeriodicMovement(power, duration, 25);
+    }
+
+    private async runAngleOscillation(power: number, angle: number, duration: number): Promise<void> {
+        if (angle <= 0) return;
+        const rpm = (power / 100) * MAX_RPM_AT_FULL_POWER;
+        const degreesPerSecond = (rpm / 60) * 360;
+        const timeToTravelAngleMs = degreesPerSecond > 0 ? (angle / degreesPerSecond) * 1000 : Infinity;
+        await this.runPeriodicMovement(power, duration, timeToTravelAngleMs);
+    }
+
+    private async runPeriodicMovement(power: number, duration: number, periodMs: number): Promise<void> {
+        const endTime = Date.now() + duration;
+        this.setMotorSpeedPWM(power / 100);
+
+        while (Date.now() < endTime) {
+            // Döngünün bu noktasında tekrar kontrol et, çünkü utilDelay hata fırlatmış olabilir
+            if (!this.isSequenceRunning) break;
+
+            this.setMotorDirection('forward');
+            await this.utilDelay(periodMs);
+
+            this.setMotorDirection('brake');
+            await this.utilDelay(BRAKE_DURATION_MS);
+
+            this.setMotorDirection('reverse');
+            await this.utilDelay(periodMs);
+
+            this.setMotorDirection('brake');
+            await this.utilDelay(BRAKE_DURATION_MS);
         }
     }
 
-    private utilDelay = (ms: number): Promise<void> => {
-        return new Promise(resolve => {
-            if (!this.isSequenceRunning) return resolve();
-            this.sequenceTimer = setTimeout(resolve, ms);
-        });
-    };
-
-    private runForward(power: number, duration: number): Promise<void> {
-        return new Promise(async (resolve) => {
-            if (!this.isSequenceRunning) return resolve();
-            this.setMotorDirection('forward');
-            this.setMotorSpeedPWM(power / 100);
-            await this.utilDelay(duration);
-            this.setMotorDirection('stop');
-            resolve();
-        });
-    }
-
-    private runPause(duration: number): Promise<void> {
-        return new Promise(async (resolve) => {
-            this.setMotorDirection('stop');
-            await this.utilDelay(duration);
-            resolve();
-        });
-    }
-
-    // --- The Corrected Oscillation/Vibration Logic ---
-    private runPeriodicMovement(power: number, duration: number, periodMs: number): Promise<void> {
-        return new Promise(async (resolve) => {
-            const endTime = Date.now() + duration;
-            this.setMotorSpeedPWM(power / 100);
-
-            while (this.isSequenceRunning && Date.now() < endTime) {
-                // Move Forward
-                this.setMotorDirection('forward');
-                await this.utilDelay(periodMs);
-                if (!this.isSequenceRunning) break;
-
-                // Brake before reversing
-                this.setMotorDirection('brake');
-                await this.utilDelay(BRAKE_DURATION_MS);
-                if (!this.isSequenceRunning) break;
-
-                // Move Reverse
-                this.setMotorDirection('reverse');
-                await this.utilDelay(periodMs);
-                if (!this.isSequenceRunning) break;
-
-                // Brake before going forward again
-                this.setMotorDirection('brake');
-                await this.utilDelay(BRAKE_DURATION_MS);
-            }
-
-            this.setMotorDirection('stop');
-            resolve();
-        });
-    }
-
-    // --- Low-Level Motor Control Functions ---
+    // --- Düşük Seviye Kontrol Fonksiyonları (DEĞİŞİKLİK YOK) ---
     private setMotorSpeedPWM(pwmValue: number): void {
         if (!this.isInitialized) return;
         this.pwm?.setDutyCycle(MOTOR_A_PINS.PWM, Math.max(0, Math.min(1, pwmValue)));
     }
-
     private setMotorDirection(direction: 'forward' | 'reverse' | 'brake' | 'stop'): void {
         if (!this.isInitialized) return;
         switch (direction) {
