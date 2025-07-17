@@ -116,27 +116,42 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
         });
     }
 
-    // Osilasyon ve Titreşim için tek, daha güvenilir bir fonksiyon
+    /// Osilasyon ve Titreşim için tek, daha güvenilir bir fonksiyon
     private runPeriodicMovement(power: number, duration: number, periodMs: number): Promise<void> {
-        return new Promise((resolve) => {
+        return new Promise(async (resolve) => {
             const pwmValue = (power / 100);
-            let currentDirection: 'forward' | 'reverse' = 'forward';
+            const endTime = Date.now() + duration;
+
+            // Promise'i hemen durdurabilmek için bir referans tutalım
+            let isMovementActive = true;
+            const stopMovement = () => {
+                isMovementActive = false;
+            };
+
+            // Toplam süre dolduğunda hareketi durduracak ana zamanlayıcı
+            this.sequenceTimer = setTimeout(() => {
+                stopMovement();
+            }, duration);
 
             // Hareketi başlat
-            this.setMotorDirection(currentDirection);
             this.setMotorSpeedPWM(pwmValue);
 
-            // Periyodik olarak yön değiştiren bir interval başlat
-            const movementInterval = setInterval(() => {
-                currentDirection = currentDirection === 'forward' ? 'reverse' : 'forward';
-                this.setMotorDirection(currentDirection);
-            }, periodMs);
+            // YENİ ve DAHA GÜVENİLİR MANTIK:
+            // setInterval yerine, her adımın tamamlandığından emin olan bir while döngüsü kullanıyoruz.
+            while (isMovementActive && Date.now() < endTime) {
+                this.setMotorDirection('forward');
+                // Yön değiştirme komutundan sonra motorun tepki vermesi için kısa bir bekleme
+                await new Promise(r => setTimeout(r, periodMs));
 
-            // Toplam süre dolduğunda her şeyi durdur ve promise'i çöz
-            this.sequenceTimer = setTimeout(() => {
-                clearInterval(movementInterval);
-                resolve();
-            }, duration);
+                // Her adımdan sonra hala çalışıp çalışmadığımızı kontrol et
+                if (!isMovementActive || Date.now() >= endTime) break;
+
+                this.setMotorDirection('reverse');
+                await new Promise(r => setTimeout(r, periodMs));
+            }
+
+            // Döngü bittiğinde veya süre dolduğunda promise'i çöz
+            resolve();
         });
     }
 
