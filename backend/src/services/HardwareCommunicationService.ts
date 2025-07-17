@@ -80,6 +80,16 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
         this.isSequenceRunning = false;
     }
 
+    public sendCommand(command: string): void {
+        // Bu fonksiyon, reçete sistemi dışındaki eski, tekil kontroller için
+        // (hız, açı vb.) gelecekte kullanılmak üzere veya test amaçlı tutulmalıdır.
+        // Şimdilik sadece konsola bir uyarı yazdıralım.
+        console.warn(
+            `sendCommand ile tekil komut ('${command}') alındı.`,
+            'Mevcut sistem reçete bazlı çalışmaktadır. Lütfen arayüzden reçete gönderin.'
+        );
+    }
+
     // --- Hareket Stratejileri ---
 
     // BASİTLEŞTİRİLMİŞ ve GÜVENİLİR bekleme fonksiyonu
