@@ -4,7 +4,6 @@ import { WebSocketServer as WSS, WebSocket } from 'ws';
 import { ICommunicationService } from './ICommunicationService';
 import config from '../../config.json';
 
-// Gerekli tüm public metodları içeren arayüz
 interface IExtendedCommunicationService extends ICommunicationService {
     executeSequence(sequence: any[]): Promise<void>;
     stopSequence(): void;
@@ -23,16 +22,13 @@ export class WebSocketServer {
     public start() {
         console.log(`WebSocket sunucusu ${config.api.port} portunda başlatıldı.`);
 
-        // DÜZELTME: Log dinleyicisini constructor yerine buraya taşıyoruz.
-        // Bu, HardwareCommunicationService'in tamamen hazır olmasını bekler.
+        // Log dinleyicisini, tüm sistemler hazır olduğunda, start() metodu içinde kuruyoruz.
         this.commService.on('log', (message) => {
             this.broadcast({ type: 'LOG_MESSAGE', payload: message });
         });
 
         this.wss.on('connection', (ws: WebSocket) => {
             console.log('Yeni bir istemci bağlandı.');
-
-            // Yeni bağlanan istemciye hoş geldin mesajı ve son durumu gönderelim.
             ws.send(JSON.stringify({
                 type: 'LOG_MESSAGE',
                 payload: `[SYSTEM] Arayüze başarıyla bağlanıldı.`
@@ -65,10 +61,7 @@ export class WebSocketServer {
                     console.error(`HATA: Geçersiz formatta mesaj alındı: ${message}`);
                 }
             });
-
-            ws.on('close', () => {
-                console.log('Bir istemcinin bağlantısı kesildi.');
-            });
+            ws.on('close', () => console.log('Bir istemcinin bağlantısı kesildi.'));
         });
     }
 
