@@ -76,16 +76,26 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
         this.isSequenceRunning = false;
     }
 
-    // YENİ: Sadece test paneli için özel, public bir fonksiyon
-    public async runDirectOscillationTest(power: number, duration: number, periodMs: number, brakeMs: number): Promise<void> {
+    // YENİ ve GÜNCELLENMİŞ Test Fonksiyonu
+    public async runDirectOscillationTest(power: number, duration: number, angle: number, brakeMs: number): Promise<void> {
         if (this.isSequenceRunning) {
             console.warn("UYARI: Başka bir işlem çalışırken test başlatılamaz.");
             return;
         }
         this.isSequenceRunning = true;
-        console.log(`TEST BAŞLATILDI: Güç=${power}, Süre=${duration}, Periyot=${periodMs}, Fren=${brakeMs}`);
+        console.log(`TEST BAŞLATILDI: Güç=${power}, Süre=${duration}, Açı=${angle}, Fren=${brakeMs}`);
         try {
-            await this.runPeriodicMovement(power, duration, periodMs, brakeMs);
+            // Açı ve güce göre periyot süresini HESAPLA
+            const rpm = (power / 100) * MAX_RPM_AT_FULL_POWER;
+            const degreesPerSecond = (rpm / 60) * 360;
+            let timeToTravelAngleMs = degreesPerSecond > 0 ? (angle / degreesPerSecond) * 1000 : Infinity;
+            if (timeToTravelAngleMs < MINIMUM_PULSE_MS) {
+                timeToTravelAngleMs = MINIMUM_PULSE_MS;
+            }
+            console.log(`Hesaplanan Test Periyodu: ${timeToTravelAngleMs.toFixed(2)}ms`);
+
+            // Hareketi başlat
+            await this.runPeriodicMovement(power, duration, timeToTravelAngleMs, brakeMs);
         } catch (e) {
             console.log("Test durduruldu.");
         } finally {
@@ -118,7 +128,7 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
     }
 
     private runVibration(power: number, duration: number): Promise<void> {
-        return this.runPeriodicMovement(power, duration, MINIMUM_PULSE_MS, 15); // Titreşim için 15ms fren
+        return this.runPeriodicMovement(power, duration, MINIMUM_PULSE_MS, 15);
     }
 
     private async runAngleOscillation(power: number, angle: number | undefined, duration: number): Promise<void> {
@@ -133,11 +143,10 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
             timeToTravelAngleMs = MINIMUM_PULSE_MS;
         }
         console.log(`Hesaplanan: Güç=${power}%, RPM=${rpm.toFixed(0)}, Tek Yön Süresi=${timeToTravelAngleMs.toFixed(2)}ms`);
-        await this.runPeriodicMovement(power, duration, timeToTravelAngleMs, 25); // Normal osilasyon için 25ms fren
+        await this.runPeriodicMovement(power, duration, timeToTravelAngleMs, 25);
     }
 
-    // Test arayüzünden doğrudan çağrılabilmesi için 'public' yapıldı.
-    public async runPeriodicMovement(power: number, duration: number, periodMs: number, brakeMs: number): Promise<void> {
+    private async runPeriodicMovement(power: number, duration: number, periodMs: number, brakeMs: number): Promise<void> {
         const endTime = Date.now() + duration;
         this.setMotorSpeedPWM(power / 100);
         while (Date.now() < endTime && this.isSequenceRunning) {
