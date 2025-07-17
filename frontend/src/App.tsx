@@ -56,12 +56,12 @@ function App() {
 
                     <Tabs.Panel value="recipe" pt="md">
                         {/* Burası eski ana sayfa içeriğiniz olacak */}
-                        <SpeedControl/>
-                        <ModeControl/>
-                        <AngleControl/>
+                        {/*<SpeedControl/>*/}
+                        {/*<ModeControl/>*/}
+                        {/*<AngleControl/>*/}
+                        <SequenceBuilder />
                         <TorqueMonitor/>
                         <TimerControl/>
-                        <SequenceBuilder />
                     </Tabs.Panel>
 
                     <Tabs.Panel value="tester" pt="md">
