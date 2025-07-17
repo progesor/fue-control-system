@@ -8,9 +8,6 @@ import i2c from 'i2c-bus';
 // --- KALİBRASYON ve AYARLAR ---
 const MAX_RPM_AT_FULL_POWER = 10000;
 const BRAKE_DURATION_MS = 20;
-
-// YENİ: Fiziksel olarak mümkün olan en kısa hareket süresi (ms).
-// Bu değerin altındaki hesaplamalar bu değere yuvarlanacak.
 const MINIMUM_PULSE_MS = 15;
 
 const MOTOR_A_PINS = { IN1: 0, IN2: 1, PWM: 2 };
@@ -57,6 +54,7 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
                         await this.runForward(command.power, command.duration);
                         break;
                     case 'OSCILLATE':
+                        // DÜZELTME: Gelen komutta açı olup olmadığını kontrol et
                         await this.runAngleOscillation(command.power, command.angle, command.duration);
                         break;
                     case 'VIBRATE':
@@ -71,7 +69,7 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
             console.log("Dizi durduruldu veya bir hatayla karşılaştı.");
         } finally {
             console.log("Dizi sonlandı.");
-            this.setMotorDirection('stop'); // Her şey bittiğinde motoru kesin olarak durdur.
+            this.setMotorDirection('stop');
             this.isSequenceRunning = false;
         }
     }
@@ -89,13 +87,12 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    // DÜZELTİLDİ: Bu fonksiyon artık kendi sonunda motoru durduruyor.
     private async runForward(power: number, duration: number): Promise<void> {
         if (!this.isSequenceRunning) return;
         this.setMotorDirection('forward');
         this.setMotorSpeedPWM(power / 100);
         await this.utilDelay(duration);
-        this.setMotorDirection('stop'); // Adım bitince dur.
+        this.setMotorDirection('stop');
     }
 
     private async runPause(duration: number): Promise<void> {
@@ -108,17 +105,21 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
         return this.runPeriodicMovement(power, duration, MINIMUM_PULSE_MS);
     }
 
-    // DÜZELTİLDİ: Fiziksel limitleri hesaba katan yeni mantık
-    private async runAngleOscillation(power: number, angle: number, duration: number): Promise<void> {
-        if (angle <= 0) return;
+    // TAMAMEN YENİLENMİŞ VE GÜÇLENDİRİLMİŞ runAngleOscillation
+    private async runAngleOscillation(power: number, angle: number | undefined, duration: number): Promise<void> {
+        // ANA DÜZELTME: Açı değeri gelmemişse veya geçersizse, varsayılan bir değer ata.
+        const safeAngle = (typeof angle === 'number' && angle > 0) ? angle : 90; // Varsayılan 90 derece
+        if (typeof angle === 'undefined') {
+            console.warn(`Açı değeri gelmedi. Varsayılan olarak ${safeAngle}° kullanılıyor.`);
+        }
+
         const rpm = (power / 100) * MAX_RPM_AT_FULL_POWER;
         const degreesPerSecond = (rpm / 60) * 360;
-        let timeToTravelAngleMs = degreesPerSecond > 0 ? (angle / degreesPerSecond) * 1000 : Infinity;
+        let timeToTravelAngleMs = degreesPerSecond > 0 ? (safeAngle / degreesPerSecond) * 1000 : Infinity;
 
-        // ANA DÜZELTME: Hesaplanan süre, fiziksel limitten daha az olamaz.
-        if (timeToTravelAngleMs < MINIMUM_PULSE_MS) {
+        // Hesaplanan sürenin NaN veya geçersiz olmadığından emin ol.
+        if (isNaN(timeToTravelAngleMs) || timeToTravelAngleMs < MINIMUM_PULSE_MS) {
             timeToTravelAngleMs = MINIMUM_PULSE_MS;
-            console.warn(`Hesaplanan süre (${timeToTravelAngleMs.toFixed(2)}ms) çok kısa. Minimuma (${MINIMUM_PULSE_MS}ms) çekildi.`);
         }
 
         console.log(`Hesaplanan: Güç=${power}%, RPM=${rpm.toFixed(0)}, Tek Yön Süresi=${timeToTravelAngleMs.toFixed(2)}ms`);
