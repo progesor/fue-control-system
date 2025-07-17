@@ -7,8 +7,7 @@ import i2c from 'i2c-bus';
 
 // --- KALİBRASYON ve AYARLAR ---
 const MAX_RPM_AT_FULL_POWER = 10000;
-const BRAKE_DURATION_MS = 20;
-const MINIMUM_PULSE_MS = 15;
+const MINIMUM_PULSE_MS = 15; // Fiziksel olarak mümkün olan en kısa hareket süresi.
 
 const MOTOR_A_PINS = { IN1: 0, IN2: 1, PWM: 2 };
 
@@ -17,9 +16,10 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
     private isInitialized = false;
     private isSequenceRunning = false;
 
+    // Arayüze log göndermek için merkezi bir fonksiyon
     private log(message: string): void {
         console.log(message);
-        this.emit('log', message); // YENİ: Logları dışarıya yayınla
+        this.emit('log', `[${new Date().toLocaleTimeString()}] ${message}`);
     }
 
     constructor() {
@@ -28,14 +28,14 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
             const i2cBus = i2c.openSync(1);
             this.pwm = new Pca9685Driver({ i2c: i2cBus, address: 0x40, frequency: 1600 }, (err) => {
                 this.isInitialized = !err;
-                if (err) console.error("PCA9685 başlatılamadı.", err);
+                if (err) this.log(`HATA: PCA9685 başlatılamadı. ${err.message}`);
                 else {
                     this.log("PCA9685 başarıyla başlatıldı.");
                     this.setMotorDirection('stop');
                 }
             });
-        } catch (error) {
-            console.error("I2C bus açılamadı!", error);
+        } catch (error: any) {
+            this.log(`HATA: I2C bus açılamadı! ${error.message}`);
         }
     }
 
@@ -44,7 +44,7 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
 
     public async executeSequence(sequence: any[]): Promise<void> {
         if (this.isSequenceRunning) {
-            console.warn("Mevcut dizi çalışırken yeni istek reddedildi.");
+            this.log("UYARI: Mevcut dizi çalışırken yeni istek reddedildi.");
             return;
         }
         this.isSequenceRunning = true;
@@ -59,7 +59,6 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
                         await this.runForward(command.power, command.duration);
                         break;
                     case 'OSCILLATE':
-                        // DÜZELTME: Gelen komutta açı olup olmadığını kontrol et
                         await this.runAngleOscillation(command.power, command.angle, command.duration);
                         break;
                     case 'VIBRATE':
@@ -85,7 +84,7 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
     }
 
     public sendCommand(command: string): void {
-        console.warn(`sendCommand ('${command}') kullanımdan kaldırıldı.`);
+        this.log(`UYARI: sendCommand ('${command}') kullanımdan kaldırıldı.`);
     }
 
     private utilDelay(ms: number): Promise<void> {
@@ -107,31 +106,31 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
     }
 
     private runVibration(power: number, duration: number): Promise<void> {
-        return this.runPeriodicMovement(power, duration, MINIMUM_PULSE_MS);
+        // Titreşim için, en kısa darbe süresi ve daha kısa bir fren süresi kullanabiliriz.
+        return this.runPeriodicMovement(power, duration, MINIMUM_PULSE_MS, 10);
     }
 
-    // TAMAMEN YENİLENMİŞ VE GÜÇLENDİRİLMİŞ runAngleOscillation
     private async runAngleOscillation(power: number, angle: number | undefined, duration: number): Promise<void> {
-        // ANA DÜZELTME: Açı değeri gelmemişse veya geçersizse, varsayılan bir değer ata.
-        const safeAngle = (typeof angle === 'number' && angle > 0) ? angle : 90; // Varsayılan 90 derece
+        const safeAngle = (typeof angle === 'number' && angle > 0) ? angle : 90;
         if (typeof angle === 'undefined') {
-            console.warn(`Açı değeri gelmedi. Varsayılan olarak ${safeAngle}° kullanılıyor.`);
+            this.log(`UYARI: Açı değeri gelmedi. Varsayılan olarak ${safeAngle}° kullanılıyor.`);
         }
 
         const rpm = (power / 100) * MAX_RPM_AT_FULL_POWER;
         const degreesPerSecond = (rpm / 60) * 360;
         let timeToTravelAngleMs = degreesPerSecond > 0 ? (safeAngle / degreesPerSecond) * 1000 : Infinity;
 
-        // Hesaplanan sürenin NaN veya geçersiz olmadığından emin ol.
-        if (isNaN(timeToTravelAngleMs) || timeToTravelAngleMs < MINIMUM_PULSE_MS) {
+        if (timeToTravelAngleMs < MINIMUM_PULSE_MS) {
+            this.log(`UYARI: Hesaplanan süre (${timeToTravelAngleMs.toFixed(2)}ms) çok kısa. Minimuma (${MINIMUM_PULSE_MS}ms) çekildi.`);
             timeToTravelAngleMs = MINIMUM_PULSE_MS;
         }
 
         this.log(`Hesaplanan: Güç=${power}%, RPM=${rpm.toFixed(0)}, Tek Yön Süresi=${timeToTravelAngleMs.toFixed(2)}ms`);
-        await this.runPeriodicMovement(power, duration, timeToTravelAngleMs);
+        await this.runPeriodicMovement(power, duration, timeToTravelAngleMs, 20); // Normal osilasyon için 20ms fren
     }
 
-    private async runPeriodicMovement(power: number, duration: number, periodMs: number): Promise<void> {
+    // Test arayüzünden doğrudan çağrılabilmesi için 'public' yapıldı.
+    public async runPeriodicMovement(power: number, duration: number, periodMs: number, brakeMs: number): Promise<void> {
         const endTime = Date.now() + duration;
         this.setMotorSpeedPWM(power / 100);
 
@@ -141,7 +140,7 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
             if (!this.isSequenceRunning) break;
 
             this.setMotorDirection('brake');
-            await this.utilDelay(BRAKE_DURATION_MS);
+            await this.utilDelay(brakeMs);
             if (!this.isSequenceRunning) break;
 
             this.setMotorDirection('reverse');
@@ -149,7 +148,7 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
             if (!this.isSequenceRunning) break;
 
             this.setMotorDirection('brake');
-            await this.utilDelay(BRAKE_DURATION_MS);
+            await this.utilDelay(brakeMs);
         }
     }
 
