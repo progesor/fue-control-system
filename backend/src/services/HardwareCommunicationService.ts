@@ -7,7 +7,11 @@ import i2c from 'i2c-bus';
 
 // --- KALİBRASYON ve AYARLAR ---
 const MAX_RPM_AT_FULL_POWER = 10000;
-const BRAKE_DURATION_MS = 25; // Frenleme süresini biraz artırmak motorun durmasını garantiler.
+const BRAKE_DURATION_MS = 20;
+
+// YENİ: Fiziksel olarak mümkün olan en kısa hareket süresi (ms).
+// Bu değerin altındaki hesaplamalar bu değere yuvarlanacak.
+const MINIMUM_PULSE_MS = 15;
 
 const MOTOR_A_PINS = { IN1: 0, IN2: 1, PWM: 2 };
 
@@ -36,7 +40,6 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
     public async start(): Promise<void> {}
     public async stop(): Promise<void> { this.stopSequence(); }
 
-    // Reçete motoru: Temiz, standart ve güvenilir.
     public async executeSequence(sequence: any[]): Promise<void> {
         if (this.isSequenceRunning) {
             console.warn("Mevcut dizi çalışırken yeni istek reddedildi.");
@@ -48,9 +51,7 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
         try {
             for (const command of sequence) {
                 if (!this.isSequenceRunning) throw new Error("Sequence stopped");
-
                 console.log(`Yürütülüyor: ${command.type}`);
-
                 switch (command.type) {
                     case 'FORWARD':
                         await this.runForward(command.power, command.duration);
@@ -70,7 +71,7 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
             console.log("Dizi durduruldu veya bir hatayla karşılaştı.");
         } finally {
             console.log("Dizi sonlandı.");
-            this.setMotorDirection('stop');
+            this.setMotorDirection('stop'); // Her şey bittiğinde motoru kesin olarak durdur.
             this.isSequenceRunning = false;
         }
     }
@@ -81,27 +82,20 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
     }
 
     public sendCommand(command: string): void {
-        // Bu fonksiyon, reçete sistemi dışındaki eski, tekil kontroller için
-        // (hız, açı vb.) gelecekte kullanılmak üzere veya test amaçlı tutulmalıdır.
-        // Şimdilik sadece konsola bir uyarı yazdıralım.
-        console.warn(
-            `sendCommand ile tekil komut ('${command}') alındı.`,
-            'Mevcut sistem reçete bazlı çalışmaktadır. Lütfen arayüzden reçete gönderin.'
-        );
+        console.warn(`sendCommand ('${command}') kullanımdan kaldırıldı.`);
     }
 
-    // --- Hareket Stratejileri ---
-
-    // BASİTLEŞTİRİLMİŞ ve GÜVENİLİR bekleme fonksiyonu
     private utilDelay(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    // DÜZELTİLDİ: Bu fonksiyon artık kendi sonunda motoru durduruyor.
     private async runForward(power: number, duration: number): Promise<void> {
         if (!this.isSequenceRunning) return;
         this.setMotorDirection('forward');
         this.setMotorSpeedPWM(power / 100);
         await this.utilDelay(duration);
+        this.setMotorDirection('stop'); // Adım bitince dur.
     }
 
     private async runPause(duration: number): Promise<void> {
@@ -111,22 +105,26 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
     }
 
     private runVibration(power: number, duration: number): Promise<void> {
-        return this.runPeriodicMovement(power, duration, 25);
+        return this.runPeriodicMovement(power, duration, MINIMUM_PULSE_MS);
     }
 
+    // DÜZELTİLDİ: Fiziksel limitleri hesaba katan yeni mantık
     private async runAngleOscillation(power: number, angle: number, duration: number): Promise<void> {
         if (angle <= 0) return;
         const rpm = (power / 100) * MAX_RPM_AT_FULL_POWER;
         const degreesPerSecond = (rpm / 60) * 360;
-        const timeToTravelAngleMs = degreesPerSecond > 0 ? (angle / degreesPerSecond) * 1000 : 0;
+        let timeToTravelAngleMs = degreesPerSecond > 0 ? (angle / degreesPerSecond) * 1000 : Infinity;
+
+        // ANA DÜZELTME: Hesaplanan süre, fiziksel limitten daha az olamaz.
+        if (timeToTravelAngleMs < MINIMUM_PULSE_MS) {
+            timeToTravelAngleMs = MINIMUM_PULSE_MS;
+            console.warn(`Hesaplanan süre (${timeToTravelAngleMs.toFixed(2)}ms) çok kısa. Minimuma (${MINIMUM_PULSE_MS}ms) çekildi.`);
+        }
 
         console.log(`Hesaplanan: Güç=${power}%, RPM=${rpm.toFixed(0)}, Tek Yön Süresi=${timeToTravelAngleMs.toFixed(2)}ms`);
-
-        if (timeToTravelAngleMs === 0) return;
         await this.runPeriodicMovement(power, duration, timeToTravelAngleMs);
     }
 
-    // TAMAMEN YENİLENMİŞ, SAĞLAM periyodik hareket fonksiyonu
     private async runPeriodicMovement(power: number, duration: number, periodMs: number): Promise<void> {
         const endTime = Date.now() + duration;
         this.setMotorSpeedPWM(power / 100);
@@ -134,17 +132,14 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
         while (Date.now() < endTime && this.isSequenceRunning) {
             this.setMotorDirection('forward');
             await this.utilDelay(periodMs);
-
             if (!this.isSequenceRunning) break;
 
             this.setMotorDirection('brake');
             await this.utilDelay(BRAKE_DURATION_MS);
-
             if (!this.isSequenceRunning) break;
 
             this.setMotorDirection('reverse');
             await this.utilDelay(periodMs);
-
             if (!this.isSequenceRunning) break;
 
             this.setMotorDirection('brake');
@@ -152,7 +147,6 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
         }
     }
 
-    // --- Düşük Seviye Kontrol Fonksiyonları ---
     private setMotorSpeedPWM(pwmValue: number): void {
         if (!this.isInitialized) return;
         this.pwm?.setDutyCycle(MOTOR_A_PINS.PWM, Math.max(0, Math.min(1, pwmValue)));
