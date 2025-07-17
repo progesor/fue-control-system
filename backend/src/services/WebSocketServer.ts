@@ -4,7 +4,7 @@ import { WebSocketServer as WSS, WebSocket } from 'ws';
 import { ICommunicationService } from './ICommunicationService';
 import config from '../../config.json';
 
-// Arayüzü en güncel haliyle tanımla
+// HardwareCommunicationService'in public metodlarına erişebilmek için arayüz
 interface IExtendedCommunicationService extends ICommunicationService {
     executeSequence(sequence: any[]): Promise<void>;
     stopSequence(): void;
@@ -21,12 +21,14 @@ export class WebSocketServer {
     }
 
     public start() {
-        this.log(`WebSocket sunucusu ${config.api.port} portunda başlatıldı.`);
-        this.commService.on('log', (message) => {
-            this.broadcast({ type: 'LOG_MESSAGE', payload: message });
-        });
+        console.log(`WebSocket sunucusu ${config.api.port} portunda başlatıldı.`);
+
+        // NOT: Harici log yayını kaldırıldı ve stabil duruma dönüldü.
+        // Loglar doğrudan Raspberry Pi konsolundan takip edilecek.
+
         this.wss.on('connection', (ws: WebSocket) => {
-            this.log('Yeni bir istemci bağlandı.');
+            console.log('Yeni bir istemci bağlandı.');
+
             ws.on('message', (message: string) => {
                 try {
                     const parsedMessage = JSON.parse(message);
@@ -37,7 +39,7 @@ export class WebSocketServer {
                         case 'STOP_SEQUENCE':
                             this.commService.stopSequence();
                             break;
-                        // DÜZELTME: Doğru, yeni test fonksiyonunu çağır
+                        // YENİ: Test komutunu doğru fonksiyona yönlendir
                         case 'DIRECT_OSCILLATE_TEST':
                             if (parsedMessage.payload) {
                                 this.commService.runDirectOscillationTest(
@@ -49,16 +51,26 @@ export class WebSocketServer {
                             }
                             break;
                         default:
-                            this.log(`Bilinmeyen mesaj tipi alındı: ${parsedMessage.type}`);
+                            console.log(`Bilinmeyen mesaj tipi alındı: ${parsedMessage.type}`);
                     }
                 } catch (error) {
-                    this.log(`HATA: Geçersiz formatta mesaj alındı: ${message}`);
+                    console.error(`HATA: Geçersiz formatta mesaj alındı: ${message}`);
                 }
             });
-            ws.on('close', () => this.log('Bir istemcinin bağlantısı kesildi.'));
+
+            ws.on('close', () => {
+                console.log('Bir istemcinin bağlantısı kesildi.');
+            });
         });
     }
 
-    private broadcast(message: object) { /* ... Değişiklik yok ... */ }
-    private log(message: string): void { /* ... Değişiklik yok ... */ }
+    // Bu fonksiyon artık kullanılmıyor ama gelecekte lazım olabilir.
+    private broadcast(message: object) {
+        const messageString = JSON.stringify(message);
+        this.wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(messageString);
+            }
+        });
+    }
 }
