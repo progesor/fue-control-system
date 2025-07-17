@@ -17,6 +17,7 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
     private pwm?: Pca9685Driver;
     private isRunning = false;
     private isInitialized = false;
+    private isSequenceRunning = false;
 
     constructor() {
         super();
@@ -92,6 +93,99 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
             console.error("Komut işlenirken hata:", error);
             this.emit('data', 'e');
         }
+    }
+
+    // YENİ: Dışarıdan komut dizisini alacak ana fonksiyon
+    public async executeSequence(sequence: any[]): Promise<void> {
+        if (this.isSequenceRunning) {
+            console.log("Mevcut bir dizi zaten çalışıyor.");
+            return;
+        }
+
+        console.log("Komut dizisi yürütülmeye başlandı:", sequence);
+        this.isSequenceRunning = true;
+
+        for (const command of sequence) {
+            // Eğer sequence çalışırken durdurma komutu gelirse döngüden çık
+            if (!this.isSequenceRunning) {
+                console.log("Komut dizisi dışarıdan durduruldu.");
+                break;
+            }
+
+            console.log(`Yürütülüyor: ${command.type}`);
+            switch (command.type) {
+                case 'FORWARD':
+                    await this.runForward(command.power, command.duration);
+                    break;
+                case 'OSCILLATE':
+                    await this.runOscillate(command.angle, command.power, command.duration);
+                    break;
+                case 'PAUSE':
+                    await this.runPause(command.duration);
+                    break;
+                // Gelecekteki 'VIBRATE' gibi komutlar buraya eklenecek
+            }
+        }
+
+        console.log("Komut dizisi tamamlandı.");
+        this.isSequenceRunning = false;
+        this.setMotorSpeedPWM(0); // Her şey bittiğinde motoru durdur.
+    }
+
+    public stopSequence(): void {
+        this.isSequenceRunning = false;
+    }
+
+    // --- YENİ Yardımcı Fonksiyonlar ---
+
+    private runForward(power: number, duration: number): Promise<void> {
+        return new Promise(resolve => {
+            const pwmValue = Math.round((power / 100) * 4095);
+            this.setMotorDirection('forward');
+            this.setMotorSpeedPWM(pwmValue);
+
+            setTimeout(() => {
+                this.setMotorSpeedPWM(0); // Adım bitince motoru durdur
+                resolve(); // Süre dolunca Promise'i çöz ve sıradaki adıma geç
+            }, duration);
+        });
+    }
+
+    private runPause(duration: number): Promise<void> {
+        return new Promise(resolve => {
+            this.setMotorSpeedPWM(0); // Emin olmak için motoru durdur
+            setTimeout(resolve, duration);
+        });
+    }
+
+    private runOscillate(angle: number, power: number, duration: number): Promise<void> {
+        return new Promise(async resolve => {
+            const endTime = Date.now() + duration;
+            const pwmValue = Math.round((power / 100) * 4095);
+
+            // Osilasyon hızını güce göre kabaca hesaplayalım (daha sonra ayarlanabilir)
+            // Saniyedeki tam tur sayısı (RPS) = RPM / 60. RPM'i de güçten tahmin edelim.
+            const rpm = (power / 100) * 5000; // max 5000 RPM varsayımı
+            const rps = rpm / 60;
+            const degreesPerSecond = rps * 360;
+            const timeForAngle = (angle / degreesPerSecond) * 1000; // ms
+
+            this.setMotorSpeedPWM(pwmValue);
+
+            while (Date.now() < endTime && this.isSequenceRunning) {
+                this.setMotorDirection('forward');
+                await this.runPause(timeForAngle);
+
+                // Zaman dolduysa veya durdurulduysa hemen çık
+                if (Date.now() >= endTime || !this.isSequenceRunning) break;
+
+                this.setMotorDirection('reverse');
+                await this.runPause(timeForAngle);
+            }
+
+            this.setMotorSpeedPWM(0);
+            resolve();
+        });
     }
 
     // --- Özel (Private) Yardımcı Fonksiyonlar ---
