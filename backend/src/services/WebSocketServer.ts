@@ -1,48 +1,75 @@
+// backend/src/services/WebSocketServer.ts
+
 import { WebSocketServer as WSS, WebSocket } from 'ws';
 import { ICommunicationService } from './ICommunicationService';
 import config from '../../config.json';
 
+// YENİ: ICommunicationService arayüzümüz artık daha yetenekli olduğu için
+// executeSequence ve stopSequence metodlarını da içerecek şekilde genişletiyoruz.
+interface IExtendedCommunicationService extends ICommunicationService {
+    executeSequence(sequence: any[]): Promise<void>;
+    stopSequence(): void;
+}
+
 export class WebSocketServer {
     private wss: WSS;
-    private commService: ICommunicationService;
+    // YENİ: commService tipini genişletilmiş arayüz olarak belirtiyoruz.
+    private commService: IExtendedCommunicationService;
 
-    // Bu sunucu, hangi iletişim servisini kullanacağını dışarıdan alacak.
-    // Bu tasarıma "Dependency Injection" denir ve kodumuzu çok esnek yapar.
     constructor(communicationService: ICommunicationService) {
-        this.commService = communicationService;
+        // Gelen servisin yeni metodlara sahip olduğundan emin olmak için tip dönüşümü yapıyoruz.
+        this.commService = communicationService as IExtendedCommunicationService;
         this.wss = new WSS({ port: config.api.port });
     }
 
     public start() {
         console.log(`WebSocket sunucusu ${config.api.port} portunda başlatıldı.`);
 
-        // İletişim servisimizden bir veri ('data') geldiğinde...
         this.commService.on('data', (data) => {
-            // Bağlı olan tüm istemcilere bu veriyi yollayalım.
             this.broadcast({ type: 'DEVICE_RESPONSE', payload: data.toString() });
         });
 
-        // YENİ: İletişim servisimizden tork verisi geldiğinde...
         this.commService.on('torque_data', (data) => {
             this.broadcast({ type: 'TORQUE_UPDATE', payload: data });
         });
 
-        // Yeni bir istemci (React arayüzü) bağlandığında...
         this.wss.on('connection', (ws: WebSocket) => {
             console.log('Yeni bir istemci bağlandı.');
 
-            // O istemciden bir mesaj geldiğinde...
             ws.on('message', (message: string) => {
                 try {
                     const parsedMessage = JSON.parse(message);
 
-                    // Gelen mesajın tipi 'COMMAND' ise...
-                    if (parsedMessage.type === 'COMMAND' && parsedMessage.payload) {
-                        // Mesajın içeriğini iletişim servisimize yollayalım.
-                        this.commService.sendCommand(parsedMessage.payload);
+                    // *** ANA DEĞİŞİKLİK BURADA ***
+                    // Artık farklı mesaj tiplerini kontrol ediyoruz.
+
+                    switch (parsedMessage.type) {
+                        // Eski tekil komutları işlemeye devam ediyoruz.
+                        case 'COMMAND':
+                            if (parsedMessage.payload) {
+                                this.commService.sendCommand(parsedMessage.payload);
+                            }
+                            break;
+
+                        // YENİ: Reçete çalıştırma komutunu yakalıyoruz.
+                        case 'EXECUTE_SEQUENCE':
+                            if (parsedMessage.payload && Array.isArray(parsedMessage.payload)) {
+                                // Gelen reçeteyi donanım servisindeki ana fonksiyona gönderiyoruz.
+                                this.commService.executeSequence(parsedMessage.payload);
+                            }
+                            break;
+
+                        // YENİ: Reçeteyi durdurma komutu (gelecekteki bir "Durdur" butonu için)
+                        case 'STOP_SEQUENCE':
+                            this.commService.stopSequence();
+                            break;
+
+                        default:
+                            console.warn('Bilinmeyen mesaj tipi alındı:', parsedMessage.type);
                     }
+
                 } catch (error) {
-                    console.error('Geçersiz formatta mesaj alındı:', message);
+                    console.error('Geçersiz formatta mesaj alındı:', message, error);
                 }
             });
 
@@ -52,7 +79,6 @@ export class WebSocketServer {
         });
     }
 
-    // Sunucuya bağlı tüm istemcilere mesaj gönderen yardımcı fonksiyon.
     private broadcast(message: object) {
         const messageString = JSON.stringify(message);
         this.wss.clients.forEach(client => {
