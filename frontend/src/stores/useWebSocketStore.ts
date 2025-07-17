@@ -5,13 +5,14 @@ interface WebSocketState {
     socket: WebSocket | null;
     isConnected: boolean;
     lastMessage: any | null;
-    isMeasuringTorque: boolean; // YENİ: Tork ölçüm durumu
+    isMeasuringTorque: boolean; // Tork ölçüm durumu
     torqueData: { name: number, value: number }[]; // YENİ: Grafik için veri dizisi
     connect: (url: string) => void;
     disconnect: () => void;
     sendMessage: (message: object) => void;
-    startTorqueMeasurement: () => void; // YENİ
-    stopTorqueMeasurement: () => void;  // YENİ
+    startTorqueMeasurement: () => void;
+    stopTorqueMeasurement: () => void;
+    logMessages: string[];
 }
 
 export const useWebSocketStore = create<WebSocketState>((set, get) => ({
@@ -20,6 +21,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     lastMessage: null,
     isMeasuringTorque: false,
     torqueData: [],
+    logMessages: [],
 
     // Bağlantı kuran ana fonksiyon
     connect: (url) => {
@@ -51,6 +53,13 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
                     const newTorqueData = [...state.torqueData, newDataPoint].slice(-100);
                     return { torqueData: newTorqueData };
                 });
+            }
+
+            if (message.type === 'LOG_MESSAGE') {
+                set((state) => ({
+                    // Mevcut logların başına yenisini ekle ve listeyi 50 ile sınırla
+                    logMessages: [message.payload, ...state.logMessages].slice(0, 50)
+                }));
             }
         };
 

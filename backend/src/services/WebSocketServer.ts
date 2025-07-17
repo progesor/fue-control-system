@@ -33,6 +33,10 @@ export class WebSocketServer {
             this.broadcast({ type: 'TORQUE_UPDATE', payload: data });
         });
 
+        this.commService.on('log', (message) => {
+            this.broadcast({ type: 'LOG_MESSAGE', payload: message });
+        });
+
         this.wss.on('connection', (ws: WebSocket) => {
             console.log('Yeni bir istemci bağlandı.');
 
@@ -62,6 +66,18 @@ export class WebSocketServer {
                         // YENİ: Reçeteyi durdurma komutu (gelecekteki bir "Durdur" butonu için)
                         case 'STOP_SEQUENCE':
                             this.commService.stopSequence();
+                            break;
+
+                        case 'DIRECT_OSCILLATE_TEST':
+                            if (parsedMessage.payload) {
+                                // Bu komutun var olup olmadığını kontrol etmemiz lazım, bu yüzden HardwareCommunicationService'e ekleyeceğiz.
+                                (this.commService as any).runPeriodicMovement(
+                                    parsedMessage.payload.power,
+                                    parsedMessage.payload.duration,
+                                    parsedMessage.payload.periodMs,
+                                    parsedMessage.payload.brakeMs
+                                );
+                            }
                             break;
 
                         default:

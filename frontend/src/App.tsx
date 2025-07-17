@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Container, Title, Stack, SimpleGrid } from '@mantine/core';
+import {Container, Title, Stack, Tabs} from '@mantine/core';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { SpeedControl } from './components/SpeedControl';
 import { ModeControl } from './components/ModeControl';
@@ -9,7 +9,9 @@ import { TimerControl } from './components/TimerControl';
 import { notifications } from '@mantine/notifications';
 import { IconX } from '@tabler/icons-react';
 import { useWebSocketStore } from './stores/useWebSocketStore';
+import { IconTools, IconReportAnalytics } from '@tabler/icons-react';
 import {SequenceBuilder} from "./components/SequenceBuilder.tsx";
+import {OscillationTester} from "./components/OscillationTester.tsx";
 
 function App() {
     const lastMessage = useWebSocketStore((state) => state.lastMessage);
@@ -40,26 +42,32 @@ function App() {
         <Container size="xl" my="xl">
             <Stack>
                 <Title order={1}>FUE Motor Kontrol Arayüzü</Title>
+                <ConnectionStatus />
 
-                {/* Ana yerleşim için Grid sistemi */}
-                <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">
-                    {/* SOL SÜTUN (Ayarlar ve Durum) */}
-                    <Stack>
-                        <ConnectionStatus />
-                        <TimerControl/>
-                        {/* Diğer ayar kartları buraya gelebilir */}
-                    </Stack>
+                <Tabs defaultValue="recipe">
+                    <Tabs.List>
+                        <Tabs.Tab value="recipe" leftSection={<IconReportAnalytics size={16} />}>
+                            Reçete Kontrolü
+                        </Tabs.Tab>
+                        <Tabs.Tab value="tester" leftSection={<IconTools size={16} />}>
+                            Gelişmiş Osilasyon Testi
+                        </Tabs.Tab>
+                    </Tabs.List>
 
-                    {/* SAĞ SÜTUN (Ana Kontroller - 2 birimlik yer kaplar) */}
-                    <Stack style={{ gridColumn: 'span 2' }}>
-                        <SpeedControl />
-                        <ModeControl />
+                    <Tabs.Panel value="recipe" pt="md">
+                        {/* Burası eski ana sayfa içeriğiniz olacak */}
+                        <SpeedControl/>
+                        <ModeControl/>
                         <AngleControl/>
                         <TorqueMonitor/>
-                        <SequenceBuilder/>
-                        {/* Diğer ana kontrol kartları (Açı, Mod vb.) buraya gelecek */}
-                    </Stack>
-                </SimpleGrid>
+                        <TimerControl/>
+                        <SequenceBuilder />
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="tester" pt="md">
+                        <OscillationTester />
+                    </Tabs.Panel>
+                </Tabs>
             </Stack>
         </Container>
     );

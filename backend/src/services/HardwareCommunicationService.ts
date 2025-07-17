@@ -17,6 +17,11 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
     private isInitialized = false;
     private isSequenceRunning = false;
 
+    private log(message: string): void {
+        console.log(message);
+        this.emit('log', message); // YENİ: Logları dışarıya yayınla
+    }
+
     constructor() {
         super();
         try {
@@ -25,7 +30,7 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
                 this.isInitialized = !err;
                 if (err) console.error("PCA9685 başlatılamadı.", err);
                 else {
-                    console.log("PCA9685 başarıyla başlatıldı.");
+                    this.log("PCA9685 başarıyla başlatıldı.");
                     this.setMotorDirection('stop');
                 }
             });
@@ -43,12 +48,12 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
             return;
         }
         this.isSequenceRunning = true;
-        console.log("Komut dizisi yürütülmeye başlandı.");
+        this.log("Komut dizisi yürütülmeye başlandı.");
 
         try {
             for (const command of sequence) {
                 if (!this.isSequenceRunning) throw new Error("Sequence stopped");
-                console.log(`Yürütülüyor: ${command.type}`);
+                this.log(`Yürütülüyor: ${command.type}`);
                 switch (command.type) {
                     case 'FORWARD':
                         await this.runForward(command.power, command.duration);
@@ -66,16 +71,16 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
                 }
             }
         } catch (e) {
-            console.log("Dizi durduruldu veya bir hatayla karşılaştı.");
+            this.log("Dizi durduruldu veya bir hatayla karşılaştı.");
         } finally {
-            console.log("Dizi sonlandı.");
+            this.log("Dizi sonlandı.");
             this.setMotorDirection('stop');
             this.isSequenceRunning = false;
         }
     }
 
     public stopSequence(): void {
-        console.log("Durdurma komutu alindi.");
+        this.log("Durdurma komutu alindi.");
         this.isSequenceRunning = false;
     }
 
@@ -122,7 +127,7 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
             timeToTravelAngleMs = MINIMUM_PULSE_MS;
         }
 
-        console.log(`Hesaplanan: Güç=${power}%, RPM=${rpm.toFixed(0)}, Tek Yön Süresi=${timeToTravelAngleMs.toFixed(2)}ms`);
+        this.log(`Hesaplanan: Güç=${power}%, RPM=${rpm.toFixed(0)}, Tek Yön Süresi=${timeToTravelAngleMs.toFixed(2)}ms`);
         await this.runPeriodicMovement(power, duration, timeToTravelAngleMs);
     }
 
