@@ -9,6 +9,7 @@ import { TimerControl } from './components/TimerControl';
 import { notifications } from '@mantine/notifications';
 import { IconX } from '@tabler/icons-react';
 import { useWebSocketStore } from './stores/useWebSocketStore';
+import {SequenceBuilder} from "./components/SequenceBuilder.tsx";
 
 function App() {
     const lastMessage = useWebSocketStore((state) => state.lastMessage);
@@ -55,6 +56,7 @@ function App() {
                         <ModeControl />
                         <AngleControl/>
                         <TorqueMonitor/>
+                        <SequenceBuilder/>
                         {/* Diğer ana kontrol kartları (Açı, Mod vb.) buraya gelecek */}
                     </Stack>
                 </SimpleGrid>
