@@ -7,7 +7,9 @@ import i2c from 'i2c-bus';
 
 // --- KALİBRASYON ve AYARLAR ---
 const MAX_RPM_AT_FULL_POWER = 10000;
-const MINIMUM_PULSE_MS = 15;
+// DÜZELTME: Motorun tepki vermesi için minimum süre ve fren süresini daha makul değerlere ayarlıyoruz.
+const MINIMUM_PULSE_MS = 20;
+const BRAKE_DURATION_MS = 30;
 
 const MOTOR_A_PINS = { IN1: 0, IN2: 1, PWM: 2 };
 
@@ -76,26 +78,16 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
         this.isSequenceRunning = false;
     }
 
-    // YENİ ve GÜNCELLENMİŞ Test Fonksiyonu
-    public async runDirectOscillationTest(power: number, duration: number, angle: number, brakeMs: number): Promise<void> {
+    // Test panelinden gelen doğrudan osilasyon komutunu işleyen public fonksiyon.
+    public async runDirectOscillationTest(power: number, duration: number, periodMs: number, brakeMs: number): Promise<void> {
         if (this.isSequenceRunning) {
             console.warn("UYARI: Başka bir işlem çalışırken test başlatılamaz.");
             return;
         }
         this.isSequenceRunning = true;
-        console.log(`TEST BAŞLATILDI: Güç=${power}, Süre=${duration}, Açı=${angle}, Fren=${brakeMs}`);
+        console.log(`TEST BAŞLATILDI: Güç=${power}, Süre=${duration}, Periyot=${periodMs}, Fren=${brakeMs}`);
         try {
-            // Açı ve güce göre periyot süresini HESAPLA
-            const rpm = (power / 100) * MAX_RPM_AT_FULL_POWER;
-            const degreesPerSecond = (rpm / 60) * 360;
-            let timeToTravelAngleMs = degreesPerSecond > 0 ? (angle / degreesPerSecond) * 1000 : Infinity;
-            if (timeToTravelAngleMs < MINIMUM_PULSE_MS) {
-                timeToTravelAngleMs = MINIMUM_PULSE_MS;
-            }
-            console.log(`Hesaplanan Test Periyodu: ${timeToTravelAngleMs.toFixed(2)}ms`);
-
-            // Hareketi başlat
-            await this.runPeriodicMovement(power, duration, timeToTravelAngleMs, brakeMs);
+            await this.runPeriodicMovement(power, duration, periodMs, brakeMs);
         } catch (e) {
             console.log("Test durduruldu.");
         } finally {
@@ -140,12 +132,14 @@ export class HardwareCommunicationService extends EventEmitter implements ICommu
         const degreesPerSecond = (rpm / 60) * 360;
         let timeToTravelAngleMs = degreesPerSecond > 0 ? (safeAngle / degreesPerSecond) * 1000 : Infinity;
         if (timeToTravelAngleMs < MINIMUM_PULSE_MS) {
+            console.warn(`Hesaplanan süre (${timeToTravelAngleMs.toFixed(2)}ms) çok kısa. Minimuma (${MINIMUM_PULSE_MS}ms) çekildi.`);
             timeToTravelAngleMs = MINIMUM_PULSE_MS;
         }
         console.log(`Hesaplanan: Güç=${power}%, RPM=${rpm.toFixed(0)}, Tek Yön Süresi=${timeToTravelAngleMs.toFixed(2)}ms`);
-        await this.runPeriodicMovement(power, duration, timeToTravelAngleMs, 25);
+        await this.runPeriodicMovement(power, duration, timeToTravelAngleMs, BRAKE_DURATION_MS);
     }
 
+    // Bu fonksiyon artık hem reçete hem de test paneli tarafından kullanılan ana motor
     private async runPeriodicMovement(power: number, duration: number, periodMs: number, brakeMs: number): Promise<void> {
         const endTime = Date.now() + duration;
         this.setMotorSpeedPWM(power / 100);

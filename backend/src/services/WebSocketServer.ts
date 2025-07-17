@@ -4,10 +4,11 @@ import { WebSocketServer as WSS, WebSocket } from 'ws';
 import { ICommunicationService } from './ICommunicationService';
 import config from '../../config.json';
 
+// Gerekli tüm public metodları içeren arayüz
 interface IExtendedCommunicationService extends ICommunicationService {
     executeSequence(sequence: any[]): Promise<void>;
     stopSequence(): void;
-    runDirectOscillationTest(power: number, duration: number, angle: number, brakeMs: number): Promise<void>;
+    runDirectOscillationTest(power: number, duration: number, periodMs: number, brakeMs: number): Promise<void>;
 }
 
 export class WebSocketServer {
@@ -21,6 +22,14 @@ export class WebSocketServer {
 
     public start() {
         console.log(`WebSocket sunucusu ${config.api.port} portunda başlatıldı.`);
+
+        // DÜZELTME: Log dinleyicisini geri ekliyoruz.
+        // HardwareCommunicationService'deki 'console.log' yerine 'this.emit' kullanıldığı için
+        // bu kısım artık doğru çalışacaktır.
+        this.commService.on('log', (message) => {
+            this.broadcast({ type: 'LOG_MESSAGE', payload: message });
+        });
+
         this.wss.on('connection', (ws: WebSocket) => {
             console.log('Yeni bir istemci bağlandı.');
             ws.on('message', (message: string) => {
@@ -38,7 +47,7 @@ export class WebSocketServer {
                                 this.commService.runDirectOscillationTest(
                                     parsedMessage.payload.power,
                                     parsedMessage.payload.duration,
-                                    parsedMessage.payload.angle, // Açı parametresi eklendi
+                                    parsedMessage.payload.periodMs,
                                     parsedMessage.payload.brakeMs
                                 );
                             }
@@ -51,6 +60,15 @@ export class WebSocketServer {
                 }
             });
             ws.on('close', () => console.log('Bir istemcinin bağlantısı kesildi.'));
+        });
+    }
+
+    private broadcast(message: object) {
+        const messageString = JSON.stringify(message);
+        this.wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(messageString);
+            }
         });
     }
 }

@@ -9,13 +9,13 @@ export function OscillationTester() {
 
     const [power, setPower] = useState(50);
     const [duration, setDuration] = useState(3000);
-    const [angle, setAngle] = useState(90); // Artık AÇI kontrolü var
-    const [brakeMs, setBrakeMs] = useState(25);
+    const [periodMs, setPeriodMs] = useState(50);
+    const [brakeMs, setBrakeMs] = useState(30);
 
     const handleStartTest = () => {
         sendMessage({
             type: 'DIRECT_OSCILLATE_TEST',
-            payload: { power, duration, angle, brakeMs } // Periyot yerine açı gönderiliyor
+            payload: { power, duration, periodMs, brakeMs }
         });
     };
 
@@ -34,20 +34,20 @@ export function OscillationTester() {
                             <Slider value={power} onChange={setPower} step={5} />
                         </div>
                         <NumberInput
-                            label="Osilasyon Açısı (°)"
-                            description="Her bir salınımın açısı."
-                            value={angle}
-                            onChange={(val) => setAngle(Number(val))}
-                            step={15}
-                            min={1}
+                            label="Tek Yön Hareket Süresi (periodMs)"
+                            description="Osilasyon hızını belirler. Düşük değer = hızlı osilasyon."
+                            value={periodMs}
+                            onChange={(val) => setPeriodMs(Number(val))}
+                            step={5}
+                            min={15}
                         />
                         <NumberInput
-                            label="Frenleme Süresi (ms)"
+                            label="Frenleme Süresi (brakeMs)"
                             description="Yön değişimleri arasındaki duraklama."
                             value={brakeMs}
                             onChange={(val) => setBrakeMs(Number(val))}
                             step={5}
-                            min={0}
+                            min={10}
                         />
                         <NumberInput
                             label="Toplam Test Süresi (ms)"
