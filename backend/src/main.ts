@@ -1,17 +1,33 @@
+// fue-control-system-main/backend/src/main.ts
+
 import { MockCommunicationService } from './services/MockCommunicationService';
+import { SerialCommunicationService } from './services/SerialCommunicationService'; // Yeni servisi import et
 import { WebSocketServer } from './services/WebSocketServer';
+import { ICommunicationService } from './services/ICommunicationService';
+import config from '../config.json'; // config.json'ı import et
 
 console.log("Sunucu altyapısı başlatılıyor...");
 
-// 1. İletişim servisimizi oluşturuyoruz (şimdilik sahte olanı).
-const commService = new MockCommunicationService();
+// Hangi iletişim servisini kullanacağımızı seçiyoruz.
+let commService: ICommunicationService;
 
-// 2. WebSocket sunucumuzu oluşturuyoruz ve hangi iletişim servisini
-//    kullanacağını ona söylüyoruz.
+if (config.simulationMode) {
+    console.log("Simülasyon modunda çalışılıyor.");
+    commService = new MockCommunicationService();
+} else {
+    console.log("Gerçek seri port modunda çalışılıyor.");
+    commService = new SerialCommunicationService();
+}
+
+// WebSocket sunucumuzu oluşturuyoruz ve seçtiğimiz iletişim servisini
+// ona enjekte ediyoruz.
 const wsServer = new WebSocketServer(commService);
 
-// 3. Her iki servisi de başlatıyoruz.
-commService.start();
+// Her iki servisi de başlatıyoruz.
+commService.start().catch(err => {
+    console.error("İletişim servisi başlatılamadı:", err);
+    process.exit(1); // Servis başlamazsa uygulamayı sonlandır.
+});
 wsServer.start();
 
 console.log("Uygulama başarıyla çalışıyor. İstemci bağlantısı bekleniyor...");
