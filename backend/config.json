@@ -1,7 +1,7 @@
 {
-  "simulationMode": true,
+  "simulationMode": false,
   "serial": {
-    "port": "/dev/ttyUSB0",
+    "port": "COM11",
     "options": {
       "baudRate": 9600
     }
