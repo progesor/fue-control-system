@@ -1,9 +1,6 @@
 import { useEffect, useRef } from 'react';
 import {Container, Title, Stack, Tabs} from '@mantine/core';
 import { ConnectionStatus } from './components/ConnectionStatus';
-import { SpeedControl } from './components/SpeedControl';
-import { ModeControl } from './components/ModeControl';
-import { AngleControl } from './components/AngleControl';
 import { TorqueMonitor } from './components/TorqueMonitor';
 import { TimerControl } from './components/TimerControl';
 import { notifications } from '@mantine/notifications';
