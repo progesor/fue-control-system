@@ -1,9 +1,9 @@
 {
   "simulationMode": false,
   "serial": {
-    "port": "COM11",
+    "port": "/dev/serial0",
     "options": {
-      "baudRate": 9600
+      "baudRate": 115200
     }
   },
   "simulationData": {
