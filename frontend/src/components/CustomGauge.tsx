@@ -1,69 +1,77 @@
-// fue-control-system-main/frontend/src/components/CustomGauge.tsx
 import { Box, Center, Text, rem } from '@mantine/core';
 
-// Bileşenin alacağı prop'ların tiplerini tanımlıyoruz
 interface CustomGaugeProps {
-    value: number; // Mevcut değer (örneğin 0-100 arası yüzde)
-    min?: number;  // Minimum değer
-    max?: number;  // Maksimum değer
-    label: string; // Değerin altındaki etiket (örn: "RPM")
-    unit: string;  // Değerin birimi (örn: "")
+    value: number;
+    displayValue: number;
+    min?: number;
+    max?: number;
+    label: string;
+    unit: string;
 }
 
-export function CustomGauge({ value, min = 0, max = 100, label, unit }: CustomGaugeProps) {
-    // Gelen değeri 0-1 aralığında bir orana çeviriyoruz
-    const ratio = (value - min) / (max - min);
+export function CustomGauge({ value, displayValue, min = 0, max = 100, label, unit }: CustomGaugeProps) {
+    const ratio = Math.max(0, Math.min((value - min) / (max - min), 1));
 
-    // Kadranımız yaklaşık 270 derecelik bir yayı kapsıyor.
-    // Başlangıç noktası solda (-135 derece), bitiş noktası sağda (+135 derece).
-    const totalAngle = 270;
-    const startAngle = -135;
+    const totalAngle = 245;
+    const startAngle = -140;
 
-    // Mevcut değere göre maskenin ne kadar döneceğini hesaplıyoruz
-    const angle = startAngle + (ratio * totalAngle);
+    const rotation = startAngle + (ratio * totalAngle);
+
+    const threshold = 50;
+    const earlyMask = 'polygon(0% 0%, 50% 0%, 50% 100%, 0% 100%)';
+    const lateMask = 'polygon(0% 0%, 100% 0%, 100% 50%, 50% 50%, 50% 100%, 0% 100%)';
+    const activeMask = value < threshold ? earlyMask : lateMask;
 
     return (
         <Box pos="relative" w={rem(250)} h={rem(250)}>
-            {/* 1. Katman: Arka plan (Çerçeve ve çentikler) */}
+            {/* 1. Katman: Arka plan */}
             <Box
                 component="img"
                 src="/gauge-background.svg"
                 pos="absolute"
-                top={0}
-                left={0}
                 w="100%"
                 h="100%"
+                // DÜZELTME: Şeffaflığın korunması için eklendi
+                style={{ mixBlendMode: 'multiply' }}
             />
 
-            {/* 2. Katman: Mavi "kuyruk" (Değer yayı) */}
+            {/* Kırpma maskesinin uygulandığı sarmalayıcı */}
             <Box
                 pos="absolute"
-                top={0}
-                left={0}
                 w="100%"
                 h="100%"
                 style={{
-                    // Maskeleme burada gerçekleşiyor
-                    maskImage: `conic-gradient(black var(--angle), transparent var(--angle))`,
-                    WebkitMaskImage: `conic-gradient(black var(--angle), transparent var(--angle))`,
-                    // Hesaplanan açıyı CSS değişkeni olarak iletiyoruz
-                    '--angle': `${angle}deg`,
+                    clipPath: activeMask,
+                    transition: 'clip-path 0.5s ease'
                 }}
             >
+                {/* 2. Katman: Dönen Gösterge */}
                 <Box
-                    component="img"
-                    src="/gauge-arc.svg"
+                    pos="absolute"
                     w="100%"
                     h="100%"
-                />
+                    style={{
+                        transform: `rotate(${rotation}deg)`,
+                        transition: 'transform 0.5s ease',
+                    }}
+                >
+                    <Box
+                        component="img"
+                        src="/gauge-arc.svg"
+                        w="100%"
+                        h="100%"
+                        // DÜZELTME: Şeffaflığın korunması için eklendi
+                        style={{ mixBlendMode: 'multiply' }}
+                    />
+                </Box>
             </Box>
 
             {/* 3. Katman: Ortadaki metinler */}
             <Center pos="absolute" w="100%" h="100%">
                 <Box ta="center">
-                    <Text size={rem(60)} fw={700} c="white" lh={1}>
-                        {Math.round(value)}
-                        <span style={{ fontSize: rem(30), marginLeft: rem(4) }}>{unit}</span>
+                    <Text size={rem(50)} fw={700} c="white" lh={1}>
+                        {Math.round(displayValue)}
+                        <span style={{ fontSize: rem(25), marginLeft: rem(4) }}>{unit}</span>
                     </Text>
                     <Text size="lg" c="dimmed" mt={-5}>{label}</Text>
                 </Box>

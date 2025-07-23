@@ -2,11 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useWebSocketStore } from '../stores/useWebSocketStore';
 import { Paper, Text, Group, ActionIcon, Center, rem } from '@mantine/core';
 import { IconPlus, IconMinus } from '@tabler/icons-react';
-import ReactSpeedometer from 'react-d3-speedometer';
+import { CustomGauge } from './CustomGauge';
 
-// 0 RPM değeri dahil 11 kademe
 const RPM_STEPS = [0, 1500, 2000, 3500, 4500, 6000, 7000, 8000, 9000, 15000, 18000];
-// Yüzde değerleri artık 0'dan 100'e kadar. Kadran bunu kullanacak.
 const PERCENTAGE_MAP = RPM_STEPS.map((_, index) => index * 10);
 
 export function SpeedControl() {
@@ -38,26 +36,13 @@ export function SpeedControl() {
             <Text size="xl" fw={700} mb="lg">Hız Kontrolü</Text>
 
             <Center style={{ flexDirection: 'column' }}>
-                {/* YENİ KADRAN BİLEŞENİ */}
-                <ReactSpeedometer
-                    width={300}
-                    height={180}
-                    minValue={0}
-                    maxValue={100}
-                    value={currentPercentage}
-                    segments={10} // 10'ar artan 10 segment
-                    needleHeightRatio={0.7}
-                    needleColor="#495057" // Gri iğne
-                    startColor="#1971c2" // Başlangıç rengi (Mavi)
-                    endColor="#4c6ef5"   // Bitiş rengi (Daha açık mavi)
-                    segmentColors={['#1971c2', '#1c7ed6', '#228be6', '#339af0', '#4dabf7', '#74c0fc', '#a5d8ff']}
-                    ringWidth={30}
-                    // Metin ve etiket stilleri
-                    valueTextFontSize={rem(24)}
-                    valueTextFontWeight="700"
-                    textColor="#dee2e6" // Metin rengi
-                    // Değeri RPM olarak göster
-                    currentValueText={`${currentRpm} RPM`}
+                {/* YENİ AYAR: Kadran yüzdeye göre hareket ederken, ortasında RPM gösteriyor */}
+                <CustomGauge
+                    value={currentPercentage} // Kadranın dönüşü yüzdeye bağlandı
+                    displayValue={currentRpm} // Ortadaki yazı RPM'i gösteriyor
+                    max={100} // Kadranın maksimum değeri 100
+                    label="RPM"
+                    unit=""
                 />
 
                 <Group justify="center" mt="md" w="100%">
