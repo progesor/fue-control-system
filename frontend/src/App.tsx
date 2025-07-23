@@ -1,66 +1,74 @@
+// fue-control-system-main/frontend/src/App.tsx
 import { useEffect, useRef } from 'react';
-import { Container, Title, Stack, SimpleGrid } from '@mantine/core';
+import { Container, Title, Stack, SimpleGrid, Tabs } from '@mantine/core';
+import { IconGauge, IconTerminal2 } from '@tabler/icons-react';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { SpeedControl } from './components/SpeedControl';
 import { ModeControl } from './components/ModeControl';
 import { AngleControl } from './components/AngleControl';
 import { TorqueMonitor } from './components/TorqueMonitor';
 import { TimerControl } from './components/TimerControl';
+import { Console } from './components/Console'; // Yeni konsolu import et
 import { notifications } from '@mantine/notifications';
 import { IconX } from '@tabler/icons-react';
 import { useWebSocketStore } from './stores/useWebSocketStore';
 
 function App() {
     const lastMessage = useWebSocketStore((state) => state.lastMessage);
-    const lastMessageRef = useRef(null); // Tekrarlanan bildirimleri engellemek için
+    const lastMessageRef = useRef(null);
 
-    // lastMessage her değiştiğinde bu blok çalışacak
     useEffect(() => {
-        // Eğer yeni bir mesaj varsa ve bu daha önce işlenmediyse...
         if (lastMessage && lastMessage !== lastMessageRef.current) {
-            // Mesajın referansını güncelleyerek tekrar işlenmesini engelle
             lastMessageRef.current = lastMessage;
-
-            // Eğer mesaj bir cihaz cevabı ve içeriği 'e' (error) ise...
             if (lastMessage.type === 'DEVICE_RESPONSE' && lastMessage.payload === 'e') {
-                // Hata bildirimi göster!
                 notifications.show({
                     title: 'Cihaz Hatası',
                     message: 'Gönderilen komut anlaşılamadı veya bir hata oluştu.',
                     color: 'red',
                     icon: <IconX />,
-                    autoClose: 5000, // 5 saniye sonra otomatik kapan
+                    autoClose: 5000,
                 });
             }
         }
-    }, [lastMessage]); // Bu useEffect'in 'lastMessage' değiştiğinde çalışmasını sağla
+    }, [lastMessage]);
 
     return (
         <Container size="xl" my="xl">
             <Stack>
                 <Title order={1}>FUE Motor Kontrol Arayüzü</Title>
+                <ConnectionStatus />
 
-                {/* Ana yerleşim için Grid sistemi */}
-                <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">
-                    {/* SOL SÜTUN (Ayarlar ve Durum) */}
-                    <Stack>
-                        <ConnectionStatus />
-                        <TimerControl/>
-                        {/* Diğer ayar kartları buraya gelebilir */}
-                    </Stack>
+                <Tabs defaultValue="control_panel">
+                    <Tabs.List>
+                        <Tabs.Tab value="control_panel" leftSection={<IconGauge size={16} />}>
+                            Kontrol Paneli
+                        </Tabs.Tab>
+                        <Tabs.Tab value="console" leftSection={<IconTerminal2 size={16} />}>
+                            Konsol
+                        </Tabs.Tab>
+                    </Tabs.List>
 
-                    {/* SAĞ SÜTUN (Ana Kontroller - 2 birimlik yer kaplar) */}
-                    <Stack style={{ gridColumn: 'span 2' }}>
-                        <SpeedControl />
-                        <ModeControl />
-                        <AngleControl/>
-                        <TorqueMonitor/>
-                        {/* Diğer ana kontrol kartları (Açı, Mod vb.) buraya gelecek */}
-                    </Stack>
-                </SimpleGrid>
+                    <Tabs.Panel value="control_panel" pt="md">
+                        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">
+                            <Stack>
+                                <TimerControl/>
+                            </Stack>
+                            <Stack style={{ gridColumn: 'span 2' }}>
+                                <SpeedControl />
+                                <ModeControl />
+                                <AngleControl/>
+                                <TorqueMonitor/>
+                            </Stack>
+                        </SimpleGrid>
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="console" pt="md" style={{ height: '70vh' }}>
+                        <Console />
+                    </Tabs.Panel>
+                </Tabs>
             </Stack>
         </Container>
     );
 }
 
-export default App
+export default App;

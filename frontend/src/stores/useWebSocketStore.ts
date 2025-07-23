@@ -7,6 +7,7 @@ interface WebSocketState {
     lastMessage: any | null;
     isMeasuringTorque: boolean; // YENİ: Tork ölçüm durumu
     torqueData: { name: number, value: number }[]; // YENİ: Grafik için veri dizisi
+    messageHistory: string[];
     connect: (url: string) => void;
     disconnect: () => void;
     sendMessage: (message: object) => void;
@@ -20,6 +21,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     lastMessage: null,
     isMeasuringTorque: false,
     torqueData: [],
+    messageHistory: [],
 
     // Bağlantı kuran ana fonksiyon
     connect: (url) => {
@@ -41,7 +43,11 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         socket.onmessage = (event) => {
             const message = JSON.parse(event.data);
             console.log('Sunucudan mesaj alındı:', message);
-            set({ lastMessage: message });
+            const formattedMessage = `[ALINAN] << ${JSON.stringify(message)}`;
+            set((state) => ({
+                lastMessage: message,
+                messageHistory: [...state.messageHistory, formattedMessage]
+            }));
 
             // YENİ: Gelen mesaj tork güncellemesi ise...
             if (message.type === 'TORQUE_UPDATE') {
@@ -66,7 +72,17 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
 
     // Sunucuya mesaj gönderen fonksiyon
     sendMessage: (message) => {
-        get().socket?.send(JSON.stringify(message));
+        const socket = get().socket;
+        if (socket) {
+            const messageString = JSON.stringify(message);
+            socket.send(messageString);
+
+            // YENİ: Gönderilen mesajı da geçmişe ekle
+            const formattedMessage = `[GÖNDERİLEN] >> ${messageString}`;
+            set((state) => ({
+                messageHistory: [...state.messageHistory, formattedMessage]
+            }));
+        }
     },
 
     // YENİ FONKSİYONLAR
