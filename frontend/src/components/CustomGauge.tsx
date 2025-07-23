@@ -31,8 +31,6 @@ export function CustomGauge({ value, displayValue, min = 0, max = 100, label, un
                 pos="absolute"
                 w="100%"
                 h="100%"
-                // DÜZELTME: Şeffaflığın korunması için eklendi
-                style={{ mixBlendMode: 'multiply' }}
             />
 
             {/* Kırpma maskesinin uygulandığı sarmalayıcı */}
@@ -60,8 +58,6 @@ export function CustomGauge({ value, displayValue, min = 0, max = 100, label, un
                         src="/gauge-arc.svg"
                         w="100%"
                         h="100%"
-                        // DÜZELTME: Şeffaflığın korunması için eklendi
-                        style={{ mixBlendMode: 'multiply' }}
                     />
                 </Box>
             </Box>
