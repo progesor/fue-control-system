@@ -1,7 +1,7 @@
 {
   "simulationMode": false,
   "serial": {
-    "port": "/dev/serial0",
+    "port": "/dev/ttyAMA0",
     "options": {
       "baudRate": 115200
     }
