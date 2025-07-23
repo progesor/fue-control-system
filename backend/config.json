@@ -3,7 +3,10 @@
   "serial": {
     "port": "/dev/ttyAMA0",
     "options": {
-      "baudRate": 115200
+      "baudRate": 115200,
+      "dataBits": 8,
+      "parity": "none",
+      "stopBits": 1
     }
   },
   "simulationData": {
