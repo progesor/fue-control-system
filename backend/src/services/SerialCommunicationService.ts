@@ -1,6 +1,6 @@
 // fue-control-system-main/backend/src/services/SerialCommunicationService.ts
 
-import { SerialPort } from 'serialport';
+import { SerialPort } from 'serialport'; // <-- @serialport/stream yerine ana paketi kullanıyoruz
 import { EventEmitter } from 'events';
 import { ICommunicationService } from './ICommunicationService';
 import config from '../../config.json';
@@ -14,94 +14,57 @@ export class SerialCommunicationService extends EventEmitter implements ICommuni
         this.port = new SerialPort({
             path: config.serial.port,
             ...config.serial.options,
-            autoOpen: false, // Portu manuel olarak açacağız
+            autoOpen: false,
         });
 
-        // Hatanın düzeltildiği satır
-        this.port.on('data', this.handleData);
-
-        this.port.on('error', (err) => {
-            console.error('Seri Port Hatası: ', err.message);
-            this.emit('error', err); // Hataları dışarıya da bildirelim
+        // ÖNEMLİ: Hata ayıklama için ham veri log'u
+        this.port.on('data', (data: Buffer) => {
+            console.log(`[RAW DATA] Gelen Ham Veri: <${data.toString('hex')}> - "${data.toString().replace(/\s/g, '?')}"`);
+            this.handleData(data); // Asıl işleyiciyi sonra çağır
         });
 
-        this.port.on('close', () => {
-            console.log('Seri Port bağlantısı kapandı.');
-        });
+        this.port.on('error', (err) => console.error('[SERVİS] Seri Port Hatası:', err?.message));
+        this.port.on('close', () => console.log('[SERVİS] Seri Port bağlantısı kapandı.'));
     }
 
-    private handleData = (data: Buffer) => {
-        // Tork ölçümü aktifse, gelen her byte'ı doğrudan 'torque_data' olarak yayınla
+    // Bu fonksiyonu private'dan public'e çevirdik, adı handleData olarak kalabilir.
+    public handleData = (data: Buffer) => {
         if (this.isMeasuringTorque) {
-            // Gelen verinin her bir byte'ını ayrı bir tork verisi olarak ele alalım
-            for (const byte of data) {
-                this.emit('torque_data', byte);
-            }
-            return; // Tork verisi geldiğinde başka bir işlem yapma
+            for (const byte of data) { this.emit('torque_data', byte); }
+            return;
         }
-
-        // Tork ölçümü aktif değilse, normal komut cevaplarını işle
-        const receivedString = data.toString().trim();
-        if (receivedString === 'o' || receivedString === 'e') {
-            console.log(`CİHAZDAN GELEN CEVAP: ${receivedString}`);
-            this.emit('data', receivedString);
-        } else if (receivedString.length > 0) { // Boş verileri loglama
-            // Cihazdan gelen beklenmedik bir veri (örn: cihazın başlattığı bir istek)
-            console.log(`CİHAZDAN GELEN İSTEK/BİLGİ: ${receivedString}`);
-            // TODO: Cihazdan gelen 'h', 'a', 't' gibi istekleri burada işleyip
-            // WebSocket üzerinden frontend'e bildirebiliriz.
+        const response = data.toString().trim();
+        if (response === 'o' || response === 'e') {
+            console.log(`[SERVİS] CİHAZDAN GELEN CEVAP: ${response}`);
+            this.emit('data', response);
+        } else if (response) {
+            console.log(`[SERVİS] CİHAZDAN GELEN BİLGİ: ${response}`);
         }
-    }
-
+    };
 
     async start(): Promise<void> {
         return new Promise((resolve, reject) => {
             this.port.open((err) => {
-                if (err) {
-                    console.error('Seri Port açılamadı: ', err.message);
-                    return reject(err);
-                }
-                console.log(`Seri Port (${config.serial.port}) başarıyla açıldı.`);
+                if (err) { return reject(err); }
+                console.log(`[SERVİS] Seri Port (${this.port.path}) başarıyla açıldı.`);
                 resolve();
             });
         });
     }
 
     async stop(): Promise<void> {
-        return new Promise((resolve, reject) => {
-            // Tork ölçümü açıksa önce onu durdur
-            if (this.isMeasuringTorque) {
-                this.sendCommand('c');
-            }
-            this.port.close((err) => {
-                if (err) {
-                    // Port zaten kapalıysa veya bir hata oluşursa bunu logla ama programı durdurma
-                    console.warn('Seri Port kapatılırken hata oluştu (muhtemelen zaten kapalıydı): ', err.message);
-                }
-                resolve();
-            });
+        return new Promise((resolve) => {
+            this.port.close(() => resolve());
         });
     }
 
     sendCommand(command: string): void {
         if (!this.port.isOpen) {
-            console.error("Seri Port açık değil. Komut gönderilemiyor.");
+            console.error("[SERVİS] Seri port açık değil, komut gönderilemiyor.");
             return;
         }
-
-        console.log(`CİHAZA GÖNDERİLEN KOMUT: ${command}`);
-
-        // Tork ölçümünün durumunu komutlara göre yönet
-        if (command === 'i') {
-            this.isMeasuringTorque = true;
-        } else if (command === 'c') {
-            this.isMeasuringTorque = false;
-        }
-
-        this.port.write(command, (err) => {
-            if (err) {
-                console.error('Komut gönderilirken hata oluştu: ', err.message);
-            }
-        });
+        console.log(`[SERVİS] CİHAZA GÖNDERİLEN KOMUT: ${command}`);
+        this.isMeasuringTorque = command === 'i' ? true : command === 'c' ? false : this.isMeasuringTorque;
+        this.port.write(command);
     }
 }
