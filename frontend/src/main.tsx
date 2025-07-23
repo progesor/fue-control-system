@@ -5,6 +5,7 @@ import { MantineProvider,createTheme  } from '@mantine/core'; // Mantine'ı impo
 import { Notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css'; // Mantine stillerini import et
 import '@mantine/notifications/styles.css';
+import 'rc-slider/assets/index.css';
 
 // Kendi özel temamızı oluşturuyoruz
 const theme = createTheme({
