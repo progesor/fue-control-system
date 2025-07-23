@@ -1,26 +1,21 @@
 import { useWebSocketStore } from '../stores/useWebSocketStore';
-import { Badge, Button, Group } from '@mantine/core';
+import { Badge, Group, Loader, Text } from '@mantine/core';
+import { IconWifi, IconWifiOff } from '@tabler/icons-react';
 
 export function ConnectionStatus() {
-    const { isConnected, connect, disconnect } = useWebSocketStore();
-
-    const handleConnect = () => {
-        connect('ws://localhost:8080');
-    };
+    const isConnected = useWebSocketStore((state) => state.isConnected);
 
     return (
-        <Group>
+        <Group gap="xs">
             {isConnected ? (
-                <Badge color="green" size="lg">BAĞLI</Badge>
+                <Badge color="green" size="lg" variant="filled" leftSection={<IconWifi size={14} />}>
+                    HAZIR
+                </Badge>
             ) : (
-                <Badge color="red" size="lg">BAĞLI DEĞİL</Badge>
+                <Badge color="red" size="lg" variant="light" leftSection={<Loader size={14} color="red" />}>
+                    LÜTFEN BEKLEYİN...
+                </Badge>
             )}
-            <Button onClick={handleConnect} disabled={isConnected} size="xs">
-                Bağlan
-            </Button>
-            <Button onClick={disconnect} disabled={!isConnected} variant="outline" size="xs">
-                Bağlantıyı Kes
-            </Button>
         </Group>
     );
 }

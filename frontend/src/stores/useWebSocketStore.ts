@@ -1,19 +1,26 @@
 import { create } from 'zustand';
 
-// Store'umuzun tutacağı state'lerin ve fonksiyonların tiplerini tanımlıyoruz.
 interface WebSocketState {
     socket: WebSocket | null;
     isConnected: boolean;
     lastMessage: any | null;
-    isMeasuringTorque: boolean; // YENİ: Tork ölçüm durumu
-    torqueData: { name: number, value: number }[]; // YENİ: Grafik için veri dizisi
+    isMeasuringTorque: boolean;
+    torqueData: { name: number, value: number }[];
     messageHistory: string[];
+    // YENİ: Aktif çalışma modunu tutacak state
+    currentMode: string;
     connect: (url: string) => void;
     disconnect: () => void;
     sendMessage: (message: object) => void;
-    startTorqueMeasurement: () => void; // YENİ
-    stopTorqueMeasurement: () => void;  // YENİ
+    startTorqueMeasurement: () => void;
+    stopTorqueMeasurement: () => void;
+    // YENİ: Modu değiştirecek fonksiyon
+    setCurrentMode: (mode: string) => void;
 }
+
+// config.json'dan varsayılan modu alıyoruz
+import config from '../../../backend/config.json';
+const defaultMode = config.modes[0].id;
 
 export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     socket: null,
@@ -22,10 +29,14 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     isMeasuringTorque: false,
     torqueData: [],
     messageHistory: [],
+    // YENİ: Başlangıç modunu config'den al
+    currentMode: defaultMode,
 
-    // Bağlantı kuran ana fonksiyon
+    // YENİ Fonksiyon
+    setCurrentMode: (mode) => set({ currentMode: mode }),
+
     connect: (url) => {
-        // Zaten bir bağlantı varsa tekrar deneme
+        // ... (connect fonksiyonunun geri kalanı aynı)
         if (get().socket) return;
 
         const socket = new WebSocket(url);
@@ -37,23 +48,22 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
 
         socket.onclose = () => {
             console.log('WebSocket bağlantısı kesildi.');
-            set({ isConnected: false, socket: null });
+            set({ isConnected: false, socket: null, messageHistory: [] });
         };
 
         socket.onmessage = (event) => {
             const message = JSON.parse(event.data);
             console.log('Sunucudan mesaj alındı:', message);
+
             const formattedMessage = `[ALINAN] << ${JSON.stringify(message)}`;
             set((state) => ({
                 lastMessage: message,
                 messageHistory: [...state.messageHistory, formattedMessage]
             }));
 
-            // YENİ: Gelen mesaj tork güncellemesi ise...
             if (message.type === 'TORQUE_UPDATE') {
                 set((state) => {
                     const newDataPoint = { name: state.torqueData.length + 1, value: message.payload };
-                    // Grafiğin sonsuza dek büyümemesi için son 100 veriyi tutalım
                     const newTorqueData = [...state.torqueData, newDataPoint].slice(-100);
                     return { torqueData: newTorqueData };
                 });
@@ -65,19 +75,17 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         };
     },
 
-    // Bağlantıyı kesen fonksiyon
     disconnect: () => {
         get().socket?.close();
     },
 
-    // Sunucuya mesaj gönderen fonksiyon
     sendMessage: (message) => {
+        // ... (sendMessage fonksiyonunun geri kalanı aynı)
         const socket = get().socket;
         if (socket) {
             const messageString = JSON.stringify(message);
             socket.send(messageString);
 
-            // YENİ: Gönderilen mesajı da geçmişe ekle
             const formattedMessage = `[GÖNDERİLEN] >> ${messageString}`;
             set((state) => ({
                 messageHistory: [...state.messageHistory, formattedMessage]
@@ -85,9 +93,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         }
     },
 
-    // YENİ FONKSİYONLAR
     startTorqueMeasurement: () => {
-        // Ölçüme başlamadan önce eski verileri temizle
         set({ isMeasuringTorque: true, torqueData: [] });
         get().sendMessage({ type: 'COMMAND', payload: 'i' });
     },

@@ -53,7 +53,7 @@ export function SpeedControl() {
                         onClick={() => handleStepChange(-1)}
                         disabled={speedIndex === 0}
                     >
-                        <IconMinus size={rem(40)} />
+                        <IconMinus size={40} />
                     </ActionIcon>
 
                     <Text w={rem(120)} ta="center" size={rem(56)} fw={700} c={currentPercentage === 0 ? 'dimmed' : 'blue.4'}>
@@ -67,7 +67,7 @@ export function SpeedControl() {
                         onClick={() => handleStepChange(1)}
                         disabled={speedIndex === RPM_STEPS.length - 1}
                     >
-                        <IconPlus size={rem(40)} />
+                        <IconPlus size={40} />
                     </ActionIcon>
                 </Group>
             </Center>
