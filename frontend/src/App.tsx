@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Container, Title, Stack, SimpleGrid, Tabs, Group } from '@mantine/core';
+import { Container, Stack, SimpleGrid, Tabs, Group, Center, Paper, Text } from '@mantine/core';
 import { IconGauge, IconTerminal2, IconBolt } from '@tabler/icons-react';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { SpeedControl } from './components/SpeedControl';
@@ -9,19 +9,16 @@ import { TorqueMonitor } from './components/TorqueMonitor';
 import { Console } from './components/Console';
 import { notifications } from '@mantine/notifications';
 import { IconX } from '@tabler/icons-react';
-import { useWebSocketStore } from './stores/useWebSocketStore';
+import {useWebSocketStore} from "./stores/useWebSocketStore.ts";
 
 function App() {
-    // Gerekli state ve fonksiyonları store'dan alıyoruz
     const { lastMessage, connect, currentMode } = useWebSocketStore();
     const lastMessageRef = useRef(null);
 
-    // YENİ: Uygulama ilk açıldığında otomatik olarak bağlanmayı dene
     useEffect(() => {
         connect('ws://192.168.2.183:8080');
     }, [connect]);
 
-    // Hata mesajlarını dinleyen useEffect (aynı kaldı)
     useEffect(() => {
         if (lastMessage && lastMessage !== lastMessageRef.current) {
             lastMessageRef.current = lastMessage;
@@ -40,17 +37,20 @@ function App() {
     return (
         <Container size="xl" my="xl">
             <Stack>
+                {/* YENİ YAPI: En üstte bağlantı durumu ve ortalanmış mod kontrolü */}
                 <Group justify="space-between">
-                    <Title order={1}>FUE Motor Kontrol Arayüzü</Title>
-                    <ConnectionStatus />
+                    <div style={{ flex: 1 }}></div> {/* Sol boşluk */}
+                    <ModeControl />
+                    <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}> {/* Sağdaki durum için */}
+                        <ConnectionStatus />
+                    </div>
                 </Group>
 
-                <Tabs defaultValue="control_panel">
+                <Tabs defaultValue="control_panel" mt="md">
                     <Tabs.List>
                         <Tabs.Tab value="control_panel" leftSection={<IconGauge size={16} />}>
                             Kontrol Paneli
                         </Tabs.Tab>
-                        {/* YENİ: Tork Monitörü için yeni sekme */}
                         <Tabs.Tab value="torque_monitor" leftSection={<IconBolt size={16} />}>
                             Tork Monitörü
                         </Tabs.Tab>
@@ -59,24 +59,27 @@ function App() {
                         </Tabs.Tab>
                     </Tabs.List>
 
-                    <Tabs.Panel value="control_panel" pt="md">
-                        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">
-                            {/* SOL SÜTUN */}
-                            <Stack>
-                                {/* YENİ: ModeControl artık solda */}
-                                <ModeControl />
-                            </Stack>
-
-                            {/* SAĞ SÜTUN */}
-                            <Stack style={{ gridColumn: 'span 2' }}>
+                    <Tabs.Panel value="control_panel" pt="xl">
+                        {/* YENİ: Seçilen moda göre farklı layout'lar gösteren dinamik alan */}
+                        {currentMode === 's1' ? (
+                            // "Continuous Mode" seçiliyken gösterilecek layout
+                            <Center>
                                 <SpeedControl />
-                                {/* YENİ: Sadece 's2' (Oscillation) modunda Açı Kontrolünü göster */}
-                                {currentMode === 's2' && <AngleControl />}
-                            </Stack>
-                        </SimpleGrid>
+                            </Center>
+                        ) : (
+                            // "Oscillation Mode" seçiliyken gösterilecek layout
+                            <SimpleGrid cols={3} spacing="xl">
+                                <SpeedControl />
+                                <Paper withBorder p="md" radius="md" style={{ minHeight: 300 }}>
+                                    <Center h="100%">
+                                        <Text c="dimmed">Placeholder</Text>
+                                    </Center>
+                                </Paper>
+                                <AngleControl />
+                            </SimpleGrid>
+                        )}
                     </Tabs.Panel>
 
-                    {/* YENİ: Tork Monitörü için yeni panel */}
                     <Tabs.Panel value="torque_monitor" pt="md">
                         <TorqueMonitor/>
                     </Tabs.Panel>
