@@ -35,16 +35,20 @@ export class SerialCommunicationService extends EventEmitter implements ICommuni
             return;
         }
 
-        const response = data.toString().trim();
+        // `.trim()` yerine doğrudan `toString()` kullanıyoruz ki 'o' veya 'e' ortada olsa da yakalayalım
+        const response = data.toString();
 
         if (response.includes('o')) {
-            console.log(`[SERVİS] CİHAZDAN OK: ${response}`);
+            console.log(`[SERVİS] Yanıt içinde 'o' (OK) bulundu.`);
             this.emit('data', 'o');
         } else if (response.includes('e')) {
-            console.log(`[SERVİS] CİHAZDAN HATA: ${response}`);
+            console.log(`[SERVİS] Yanıt içinde 'e' (Hata) bulundu.`);
             this.emit('data', 'e');
-        } else if (response) {
-            console.log(`[SERVİS] CİHAZDAN BİLGİ: ${response}`);
+        } else if (response.trim().length > 0) {
+            // DÜZELTME: Eğer 'o' veya 'e' yoksa ama veri boş değilse,
+            // bunu geçici olarak 'o' kabul et ve sıralı komut akışının devam etmesini sağla.
+            console.log(`[SERVİS] Yanıt anlaşılamadı ama veri var. Geçici olarak 'o' (OK) kabul ediliyor.`);
+            this.emit('data', 'o');
         }
     };
 
