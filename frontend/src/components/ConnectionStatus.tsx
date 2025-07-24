@@ -1,6 +1,6 @@
 import { useWebSocketStore } from '../stores/useWebSocketStore';
-import { Badge, Group, Loader, Text } from '@mantine/core';
-import { IconWifi, IconWifiOff } from '@tabler/icons-react';
+import { Badge, Group, Loader } from '@mantine/core';
+import { IconWifi } from '@tabler/icons-react';
 
 export function ConnectionStatus() {
     const isConnected = useWebSocketStore((state) => state.isConnected);
