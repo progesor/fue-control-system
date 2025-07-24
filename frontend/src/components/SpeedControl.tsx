@@ -1,16 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
 import { useWebSocketStore } from '../stores/useWebSocketStore';
 import { Paper, Text, Group, ActionIcon, Center, rem } from '@mantine/core';
 import { IconPlus, IconMinus } from '@tabler/icons-react';
 import { CustomGauge } from './CustomGauge';
-// YENİ: Oscillation config'i import ediyoruz
 import { OSCILLATION_SPEEDS } from '../oscillationConfig';
+import {useEffect, useState} from "react";
 
-// Continuous mod için hız kademeleri (artık kendi adıyla daha belirgin)
+// Continuous mod için hız kademeleri
 const CONTINUOUS_RPM_STEPS = [0, 1500, 2000, 3500, 4500, 6000, 7000, 8000, 9000, 15000, 18000];
 
 export function SpeedControl() {
-    // YENİ: Gerekli tüm state ve fonksiyonları store'dan alıyoruz
     const {
         sendMessage,
         currentMode,
@@ -20,30 +18,31 @@ export function SpeedControl() {
 
     // Continuous mod için lokal bir state tutmaya devam ediyoruz
     const [continuousSpeedIndex, setContinuousSpeedIndex] = useState(1);
-    const isInitialMount = useRef(true);
 
-    // YENİ: Hangi modun aktif olduğuna göre doğru verileri ve fonksiyonları seçiyoruz
     const isOscillationMode = currentMode === 's2';
+
+    // Aktif moda göre doğru verileri ve state'leri seçiyoruz
     const activeIndex = isOscillationMode ? oscillationSpeedIndex : continuousSpeedIndex;
     const setActiveIndex = isOscillationMode ? setOscillationSpeedIndex : setContinuousSpeedIndex;
     const speedSteps = isOscillationMode ? OSCILLATION_SPEEDS : CONTINUOUS_RPM_STEPS;
 
-    // Komut gönderme mantığı Continuous mod için burada kalıyor.
+    // Sadece Continuous modda komut gönderimini yönetiyoruz.
     // Oscillation modunun komutları App.tsx'den yönetiliyor.
     useEffect(() => {
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
-            return;
-        }
         if (!isOscillationMode) {
             const rpmToSend = speedSteps[activeIndex];
             sendMessage({ type: 'COMMAND', payload: `h${rpmToSend}` });
         }
-    }, [continuousSpeedIndex]); // Sadece continuous index'i değiştiğinde tetiklenir
+    }, [continuousSpeedIndex]);
 
     const handleStepChange = (increment: number) => {
         const newIndex = activeIndex + increment;
-        setActiveIndex(Math.max(0, Math.min(newIndex, speedSteps.length - 1)));
+        const boundedIndex = Math.max(0, Math.min(newIndex, speedSteps.length - 1));
+
+        // set state'i bir fonksiyon olarak çağırarak önceki state'e güvenli erişim
+        if (typeof setActiveIndex === 'function') {
+            setActiveIndex(boundedIndex);
+        }
     };
 
     const currentRpm = speedSteps[activeIndex];

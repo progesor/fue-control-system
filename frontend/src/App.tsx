@@ -28,7 +28,7 @@ function App() {
     const prevAngleIndex = useRef(oscillationAngleIndex);
 
     useEffect(() => {
-        connect('ws://192.168.2.183:8080');
+        connect('ws://localhost:8080');
     }, [connect]);
 
     useEffect(() => {
