@@ -7,8 +7,8 @@ interface WebSocketState {
     isMeasuringTorque: boolean;
     torqueData: { name: number, value: number }[];
     messageHistory: string[];
-    // YENİ: Aktif çalışma modunu tutacak state
     currentMode: string;
+    needsInitialization: boolean;
     connect: (url: string) => void;
     disconnect: () => void;
     sendMessage: (message: object) => void;
@@ -29,21 +29,21 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     isMeasuringTorque: false,
     torqueData: [],
     messageHistory: [],
-    // YENİ: Başlangıç modunu config'den al
     currentMode: defaultMode,
+    needsInitialization: false,
 
     // YENİ Fonksiyon
     setCurrentMode: (mode) => set({ currentMode: mode }),
 
     connect: (url) => {
-        // ... (connect fonksiyonunun geri kalanı aynı)
         if (get().socket) return;
 
         const socket = new WebSocket(url);
 
         socket.onopen = () => {
             console.log('WebSocket bağlantısı kuruldu.');
-            set({ isConnected: true, socket: socket });
+            set({ isConnected: true, socket: socket, needsInitialization: true });
+            get().sendMessage({ type: 'COMMAND', payload: 's1' });
         };
 
         socket.onclose = () => {
@@ -54,6 +54,15 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         socket.onmessage = (event) => {
             const message = JSON.parse(event.data);
             console.log('Sunucudan mesaj alındı:', message);
+
+            const state = get();
+            if (state.needsInitialization && message.type === 'DEVICE_RESPONSE' && message.payload === 'o') {
+                // Eğer başlatma modundaysak ve 'o' cevabı geldiyse, ikinci komutu gönder
+                console.log('Başlatma sekansı: s1 komutu ONAYLANDI. h1500 gönderiliyor...');
+                state.sendMessage({ type: 'COMMAND', payload: 'h1500' });
+                // Sekansı tamamla
+                set({ needsInitialization: false });
+            }
 
             const formattedMessage = `[ALINAN] << ${JSON.stringify(message)}`;
             set((state) => ({

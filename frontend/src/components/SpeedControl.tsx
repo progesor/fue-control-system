@@ -9,7 +9,7 @@ const PERCENTAGE_MAP = RPM_STEPS.map((_, index) => index * 10);
 
 export function SpeedControl() {
     const sendMessage = useWebSocketStore((state) => state.sendMessage);
-    const [speedIndex, setSpeedIndex] = useState(0);
+    const [speedIndex, setSpeedIndex] = useState(1);
     const isInitialMount = useRef(true);
 
     useEffect(() => {
