@@ -1,48 +1,62 @@
-import { useState, useEffect } from 'react';
 import { useWebSocketStore } from '../stores/useWebSocketStore';
-import { Paper, Text, Slider, NumberInput, Group } from '@mantine/core';
-import { useDebouncedValue } from '@mantine/hooks';
+import { Paper, Text, Group, ActionIcon, Center, rem } from '@mantine/core';
+import { IconPlus, IconMinus } from '@tabler/icons-react';
+import { CustomGauge } from './CustomGauge';
+import { OSCILLATION_BASE_ANGLES } from '../oscillationConfig';
 
 export function AngleControl() {
-    const sendMessage = useWebSocketStore((state) => state.sendMessage);
-    const [value, setValue] = useState(0);
-    const [debouncedValue] = useDebouncedValue(value, 500);
+    const { oscillationAngleIndex, setOscillationAngleIndex } = useWebSocketStore();
 
-    useEffect(() => {
-        // Sadece başlangıçta (0 iken) komut göndermemek için kontrol
-        if (debouncedValue !== 0) {
-            // Tek fark burada: 'h' yerine 'a' komutunu gönderiyoruz.
-            sendMessage({ type: 'COMMAND', payload: `a${debouncedValue}` });
-        }
-    }, [debouncedValue, sendMessage]);
+    const handleStepChange = (increment: number) => {
+        // DÜZELTME: Fonksiyon göndermek yerine, mevcut değeri alıp yeni değeri hesaplıyoruz
+        // ve set fonksiyonuna doğrudan yeni sayıyı gönderiyoruz.
+        const newIndex = oscillationAngleIndex + increment;
+        const boundedIndex = Math.max(0, Math.min(newIndex, OSCILLATION_BASE_ANGLES.length - 1));
+        setOscillationAngleIndex(boundedIndex);
+    };
+
+    const currentBaseAngle = OSCILLATION_BASE_ANGLES[oscillationAngleIndex];
+    const currentPercentage = (oscillationAngleIndex / (OSCILLATION_BASE_ANGLES.length - 1)) * 100;
 
     return (
         <Paper withBorder p="md" radius="md">
-            <Text size="xl" fw={700}>Açı (°)</Text>
-            <Text size="sm" c="dimmed" mb="xl">Motorun hareket edeceği açıyı ayarlayın.</Text>
+            <Text size="xl" fw={700} mb="lg">Açı Kontrolü</Text>
 
-            <Group>
-                <Slider
-                    value={value}
-                    onChange={setValue}
-                    min={0}
-                    max={360} // Açı için mantıklı bir maksimum değer
-                    step={5}   // Açı için mantıklı bir artış adımı
-                    style={{ flexGrow: 1 }}
-                    size="xl"
-                    thumbSize={26}
+            <Center style={{ flexDirection: 'column' }}>
+                <CustomGauge
+                    value={currentPercentage}
+                    displayValue={currentBaseAngle}
+                    max={100}
+                    label="Derece"
+                    unit="°"
                 />
-                <NumberInput
-                    value={value}
-                    onChange={(val) => setValue(Number(val))}
-                    min={0}
-                    max={360}
-                    step={5}
-                    w={120}
-                    size="lg"
-                    rightSection={<Text size="sm" c="dimmed">°</Text>} // Birim sembolü ekledik
-                />
-            </Group>
+
+                <Group justify="center" mt="md" w="100%">
+                    <ActionIcon
+                        size={rem(64)}
+                        variant="default"
+                        radius="xl"
+                        onClick={() => handleStepChange(-1)}
+                        disabled={oscillationAngleIndex === 0}
+                    >
+                        <IconMinus size={40} />
+                    </ActionIcon>
+
+                    <Text w={rem(120)} ta="center" size={rem(40)} fw={700} c="teal.4">
+                        {`${currentBaseAngle}°`}
+                    </Text>
+
+                    <ActionIcon
+                        size={rem(64)}
+                        variant="default"
+                        radius="xl"
+                        onClick={() => handleStepChange(1)}
+                        disabled={oscillationAngleIndex === OSCILLATION_BASE_ANGLES.length - 1}
+                    >
+                        <IconPlus size={40} />
+                    </ActionIcon>
+                </Group>
+            </Center>
         </Paper>
     );
 }

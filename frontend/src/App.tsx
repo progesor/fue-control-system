@@ -9,14 +9,26 @@ import { TorqueMonitor } from './components/TorqueMonitor';
 import { Console } from './components/Console';
 import { notifications } from '@mantine/notifications';
 import { IconX } from '@tabler/icons-react';
-import {useWebSocketStore} from "./stores/useWebSocketStore.ts";
+import {useWebSocketStore} from "./stores/useWebSocketStore";
+import { OSCILLATION_SPEEDS, OSCILLATION_ANGLES_TABLE } from './oscillationConfig';
 
 function App() {
-    const { lastMessage, connect, currentMode } = useWebSocketStore();
+    const {
+        lastMessage,
+        connect,
+        currentMode,
+        sendMessage,
+        oscillationSpeedIndex,
+        oscillationAngleIndex,
+        oscillationInitStep
+    } = useWebSocketStore();
     const lastMessageRef = useRef(null);
+    // const isInitialMount = useRef(true);
+    const prevSpeedIndex = useRef(oscillationSpeedIndex);
+    const prevAngleIndex = useRef(oscillationAngleIndex);
 
     useEffect(() => {
-        connect('ws://localhost:8080');
+        connect('ws://192.168.2.183:8080');
     }, [connect]);
 
     useEffect(() => {
@@ -33,6 +45,36 @@ function App() {
             }
         }
     }, [lastMessage]);
+
+    useEffect(() => {
+        // Sadece oscillation modundaysak ve kurulum tamamlandıysa bu mantığı çalıştır
+        if (currentMode === 's2' && oscillationInitStep === 'complete') {
+            const speedChanged = prevSpeedIndex.current !== oscillationSpeedIndex;
+            const angleChanged = prevAngleIndex.current !== oscillationAngleIndex;
+
+            // Eğer hiçbir şey değişmediyse bir şey yapma
+            if (!speedChanged && !angleChanged) return;
+
+            const speedToSend = OSCILLATION_SPEEDS[oscillationSpeedIndex];
+            // Yeni açı her zaman mevcut hız ve açı indeksine göre hesaplanır
+            const angleToSend = OSCILLATION_ANGLES_TABLE[oscillationSpeedIndex][oscillationAngleIndex];
+
+            if (speedChanged) {
+                // Hız değiştiyse, hem yeni hızı hem de bu hıza karşılık gelen yeni açıyı gönder
+                console.log(`OSC_OP: Speed changed. Sending H:${speedToSend}, A:${angleToSend}`);
+                sendMessage({ type: 'COMMAND', payload: `h${speedToSend}` });
+                sendMessage({ type: 'COMMAND', payload: `a${angleToSend}` });
+            } else if (angleChanged) {
+                // Sadece açı değiştiyse, sadece yeni açıyı gönder
+                console.log(`OSC_OP: Angle changed. Sending A:${angleToSend}`);
+                sendMessage({ type: 'COMMAND', payload: `a${angleToSend}` });
+            }
+
+            // Son gönderilen indeksleri referans olarak kaydet
+            prevSpeedIndex.current = oscillationSpeedIndex;
+            prevAngleIndex.current = oscillationAngleIndex;
+        }
+    }, [currentMode, oscillationSpeedIndex, oscillationAngleIndex, sendMessage, oscillationInitStep]);
 
     return (
         <Container size="xl" my="xl">

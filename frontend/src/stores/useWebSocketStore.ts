@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { OSCILLATION_SPEEDS, OSCILLATION_ANGLES_TABLE } from '../oscillationConfig';
 
 interface WebSocketState {
     socket: WebSocket | null;
@@ -9,6 +10,9 @@ interface WebSocketState {
     messageHistory: string[];
     currentMode: string;
     needsInitialization: boolean;
+    oscillationSpeedIndex: number;
+    oscillationAngleIndex: number;
+    oscillationInitStep: 'none' | 'awaiting_s2_ack' | 'awaiting_h_ack' | 'complete';
     connect: (url: string) => void;
     disconnect: () => void;
     sendMessage: (message: object) => void;
@@ -16,6 +20,9 @@ interface WebSocketState {
     stopTorqueMeasurement: () => void;
     // YENİ: Modu değiştirecek fonksiyon
     setCurrentMode: (mode: string) => void;
+    setOscillationSpeedIndex: (index: number) => void;
+    setOscillationAngleIndex: (index: number) => void;
+    startOscillationInit: () => void;
 }
 
 // config.json'dan varsayılan modu alıyoruz
@@ -31,9 +38,21 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     messageHistory: [],
     currentMode: defaultMode,
     needsInitialization: false,
+    oscillationSpeedIndex: 0,
+    oscillationAngleIndex: 0,
+    oscillationInitStep: 'none',
 
     // YENİ Fonksiyon
     setCurrentMode: (mode) => set({ currentMode: mode }),
+
+    setOscillationSpeedIndex: (index) => set({ oscillationSpeedIndex: index }),
+    setOscillationAngleIndex: (index) => set({ oscillationAngleIndex: index }),
+
+    startOscillationInit: () => {
+        // State'i "s2 onayı bekleniyor" olarak ayarla ve s2 komutunu gönder
+        set({ oscillationInitStep: 'awaiting_s2_ack' });
+        get().sendMessage({ type: 'COMMAND', payload: 's2' });
+    },
 
     connect: (url) => {
         if (get().socket) return;
@@ -56,6 +75,26 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
             console.log('Sunucudan mesaj alındı:', message);
 
             const state = get();
+
+            if (message.type === 'DEVICE_RESPONSE' && message.payload === 'o') {
+                switch (state.oscillationInitStep) {
+                    case 'awaiting_s2_ack':
+                        // s2 onayı geldi, şimdi ilk hızı gönder
+                        console.log('OSC_INIT: s2 OK. Sending initial speed...');
+                        state.sendMessage({ type: 'COMMAND', payload: `h${OSCILLATION_SPEEDS[0]}` });
+                        set({ oscillationInitStep: 'awaiting_h_ack' });
+                        break;
+                    case 'awaiting_h_ack':
+                        // hız onayı geldi, şimdi ilk açıyı gönder
+                        console.log('OSC_INIT: Initial speed OK. Sending initial angle...');
+                        const initialAngle = OSCILLATION_ANGLES_TABLE[0][0];
+                        state.sendMessage({ type: 'COMMAND', payload: `a${initialAngle}` });
+                        // Kurulum tamamlandı
+                        set({ oscillationInitStep: 'complete' });
+                        break;
+                }
+            }
+
             if (state.needsInitialization && message.type === 'DEVICE_RESPONSE' && message.payload === 'o') {
                 // Eğer başlatma modundaysak ve 'o' cevabı geldiyse, ikinci komutu gönder
                 console.log('Başlatma sekansı: s1 komutu ONAYLANDI. h1500 gönderiliyor...');
