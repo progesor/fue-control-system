@@ -1,93 +1,103 @@
-// fue-control-system-main/backend/src/services/SerialCommunicationService.ts
+// backend/src/services/SerialCommunicationService.ts
+
 import { SerialPort } from 'serialport';
-import { EventEmitter } from 'events';
+import { ReadlineParser } from '@serialport/parser-readline';
 import { ICommunicationService } from './ICommunicationService';
-import config from '../../config.json';
 
-export class SerialCommunicationService extends EventEmitter implements ICommunicationService {
+export class SerialCommunicationService implements ICommunicationService {
     private port: SerialPort;
-    private isMeasuringTorque = false;
+    private parser: ReadlineParser;
+    private isConnected: boolean = false;
+    private commandQueue: { command: string, resolve: (value: string) => void, reject: (reason?: any) => void }[] = [];
+    private isProcessing: boolean = false;
 
-    constructor() {
-        super();
+    constructor(path: string, baudRate: number) {
+        this.port = new SerialPort({ path, baudRate, autoOpen: false });
+        this.parser = this.port.pipe(new ReadlineParser({ delimiter: '\n' }));
 
-        this.port = new SerialPort({
-            path: config.serial.port,
-            ...config.serial.options,
-            autoOpen: false,
+        this.port.on('open', () => {
+            this.isConnected = true;
+            console.log(`Serial port ${path} opened.`);
+            this.parser.on('data', this.handleResponse.bind(this));
         });
 
-        // Gelen ham veriyi logla ve işlemeye gönder
-        this.port.on('data', (data: Buffer) => {
-            console.log(`[RAW DATA] Gelen Ham Veri: <${data.toString('hex')}> - "${data.toString().replace(/\s/g, '?')}"`);
-            this.handleData(data);
+        this.port.on('close', () => {
+            this.isConnected = false;
+            console.log(`Serial port ${path} closed.`);
         });
 
-        this.port.on('error', (err) => console.error('[SERVİS] Seri Port Hatası:', err?.message));
-        this.port.on('close', () => console.log('[SERVİS] Seri Port bağlantısı kapandı.'));
+        this.port.on('error', (err) => {
+            console.error('Serial Port Error: ', err);
+            this.isConnected = false;
+        });
     }
 
-    public handleData = (data: Buffer) => {
-        if (this.isMeasuringTorque) {
-            for (const byte of data) {
-                this.emit('torque_data', byte);
-            }
-            return;
-        }
-
-        // `.trim()` yerine doğrudan `toString()` kullanıyoruz ki 'o' veya 'e' ortada olsa da yakalayalım
-        const response = data.toString();
-
-        if (response.includes('o')) {
-            console.log(`[SERVİS] Yanıt içinde 'o' (OK) bulundu.`);
-            this.emit('data', 'o');
-        } else if (response.includes('e')) {
-            console.log(`[SERVİS] Yanıt içinde 'e' (Hata) bulundu.`);
-            this.emit('data', 'e');
-        } else if (response.trim().length > 0) {
-            // DÜZELTME: Eğer 'o' veya 'e' yoksa ama veri boş değilse,
-            // bunu geçici olarak 'o' kabul et ve sıralı komut akışının devam etmesini sağla.
-            console.log(`[SERVİS] Yanıt anlaşılamadı ama veri var. Geçici olarak 'o' (OK) kabul ediliyor.`);
-            this.emit('data', 'o');
-        }
-    };
-
-    async start(): Promise<void> {
+    public open(): Promise<void> {
         return new Promise((resolve, reject) => {
             this.port.open((err) => {
                 if (err) {
-                    console.error(`[SERVİS] Seri port açılamadı: ${err.message}`);
                     return reject(err);
                 }
-                console.log(`[SERVİS] Seri Port (${this.port.path}) başarıyla açıldı.`);
-                resolve();
+                // Arduino'nun başlaması için kısa bir bekleme süresi
+                setTimeout(resolve, 2000);
             });
         });
     }
 
-    async stop(): Promise<void> {
-        return new Promise((resolve) => {
-            if (this.port.isOpen) {
-                this.port.close(() => {
-                    console.log(`[SERVİS] Seri port kapatıldı.`);
-                    resolve();
-                });
-            } else {
-                resolve();
+    public close(): void {
+        this.port.close();
+    }
+
+    public getIsConnected(): boolean {
+        return this.isConnected;
+    }
+
+    // Komutları bir sıraya ekleyip tek tek işleyen daha sağlam bir yapı
+    public sendCommand(command: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+            this.commandQueue.push({ command, resolve, reject });
+            if (!this.isProcessing) {
+                this.processQueue();
             }
         });
     }
 
-    sendCommand(command: string): void {
-        if (!this.port.isOpen) {
-            console.error("[SERVİS] Seri port açık değil, komut gönderilemiyor.");
+    private processQueue() {
+        if (this.commandQueue.length === 0) {
+            this.isProcessing = false;
             return;
         }
 
-        console.log(`[SERVİS] CİHAZA GÖNDERİLEN KOMUT: ${command}`);
-        this.isMeasuringTorque = command === 'i' ? true : command === 'c' ? false : this.isMeasuringTorque;
+        this.isProcessing = true;
+        const { command } = this.commandQueue[0];
 
-        // Komutun sonuna '\n' eklenmeli çünkü Arduino bunu bekliyor
-        this.port.write(command + '\n');
+        this.port.write(`${command}\n`, (err) => {
+            if (err) {
+                console.error(`Error writing to serial port: ${err.message}`);
+                // Hata durumunda sıradaki komutu reddet ve devam et
+                const nextCommand = this.commandQueue.shift();
+                if(nextCommand) {
+                    nextCommand.reject(err);
+                }
+                this.processQueue(); // Bir sonraki komuta geç
+            }
+        });
+    }
+
+    private handleResponse(data: string) {
+        const response = data.trim();
+        if (this.commandQueue.length > 0) {
+            const { resolve, reject } = this.commandQueue.shift()!; // Sıradaki komutu al ve sıradan çıkar
+
+            if (response.startsWith('ERR')) {
+                console.warn(`Arduino Error Response for command: ${response}`);
+                reject(new Error(response));
+            } else {
+                resolve(response);
+            }
+        }
+
+        // Bir sonraki komutu işle
+        this.processQueue();
     }
 }
