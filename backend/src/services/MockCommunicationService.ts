@@ -1,83 +1,56 @@
+// backend/src/services/MockCommunicationService.ts
+// TS2739 HATASINI GİDEREN NİHAİ VERSİYON
+
 import { ICommunicationService } from './ICommunicationService';
-import { EventEmitter } from 'events';
-import config from '../../config.json'; // config.json dosyamızı import ediyoruz
 
-export class MockCommunicationService extends EventEmitter implements ICommunicationService {
-    private isRunning = false;
-    private torqueInterval: NodeJS.Timeout | null = null; // Tork interval'ını tutmak için yeni değişken
+export class MockCommunicationService implements ICommunicationService {
+    private isConnected: boolean = false;
+    private responseDelay: number;
 
-    constructor() {
-        super(); // EventEmitter'ın constructor'ını çağırıyoruz
+    constructor(responseDelay: number = 50) {
+        this.responseDelay = responseDelay;
     }
 
-    async start(): Promise<void> {
-        console.log("Mock İletişim Servisi Başlatıldı.");
-        this.isRunning = true;
-        // Gerçek serviste burada seri porta bağlanılır.
+    public open(): Promise<void> {
+        console.log('[MOCK] Sahte bağlantı açılıyor...');
+        return new Promise(resolve => {
+            setTimeout(() => {
+                this.isConnected = true;
+                console.log('[MOCK] Sahte bağlantı başarıyla açıldı.');
+                resolve();
+            }, 500);
+        });
     }
 
-    async stop(): Promise<void> {
-        console.log("Mock İletişim Servisi Durduruldu.");
-        this.isRunning = false;
-        if (this.torqueInterval) {
-            clearInterval(this.torqueInterval); // Servis durursa tork ölçümünü de durdur
-        }
-        // Gerçek serviste burada seri port bağlantısı kapatılır.
+    public close(): void {
+        this.isConnected = false;
+        console.log('[MOCK] Sahte bağlantı kapatıldı.');
     }
 
-    sendCommand(command: string): void {
-        if (!this.isRunning) {
-            console.error("Servis çalışmıyor. Önce start() çağrılmalı.");
-            return;
-        }
-
-        console.log(`SAHTE CİHAZA GÖNDERİLEN KOMUT: ${command}`);
-
-        // Tork başlatma komutu
-        if (command === 'i') {
-            this.emit('data', 'o'); // 'i' komutuna 'o' ile cevap ver
-            this.startTorqueStream();
-            return;
-        }
-
-        // Tork durdurma komutu
-        if (command === 'c') {
-            this.stopTorqueStream();
-            this.emit('data', 'o'); // 'c' komutuna da 'o' ile cevap ver
-            return;
-        }
-
-        // config.json'dan okuduğumuz gecikme süresi kadar bekleyip cevap veriyoruz.
-        setTimeout(() => {
-            // %90 ihtimalle 'o' (ok), %10 ihtimalle 'e' (error) cevabı verelim.
-            const response = Math.random() < 0.9 ? 'o' : 'e';
-
-            console.log(`SAHTE CİHAZDAN GELEN CEVAP: ${response}`);
-
-            // 'data' olayını yayınlayarak cevabı dinleyenlere gönderiyoruz.
-            this.emit('data', response);
-
-        }, config.simulationData.responseDelayMs);
+    public getIsConnected(): boolean {
+        return this.isConnected;
     }
 
-    // Tork veri akışını başlatan YENİ fonksiyon
-    private startTorqueStream(): void {
-        if (this.torqueInterval) return; // Zaten çalışıyorsa tekrar başlatma
-        console.log('Tork ölçümü başlatıldı.');
-        this.torqueInterval = setInterval(() => {
-            // 0-255 arası rastgele bir byte değeri üretelim
-            const torqueValue = Math.floor(Math.random() * 256);
-            // 'data' yerine 'torque_data' adında özel bir olay yayınlayalım
-            this.emit('torque_data', torqueValue);
-        }, config.simulationData.torqueIntervalMs);
+    public sendCommand(command: string): Promise<string> {
+        return new Promise(resolve => {
+            setTimeout(() => {
+                const response = this.getMockResponse(command);
+                console.log(`[MOCK] Komut alındı: "${command}", Yanıt: "${response}"`);
+                resolve(response);
+            }, this.responseDelay);
+        });
     }
 
-    // Tork veri akışını durduran YENİ fonksiyon
-    private stopTorqueStream(): void {
-        if (this.torqueInterval) {
-            console.log('Tork ölçümü durduruldu.');
-            clearInterval(this.torqueInterval);
-            this.torqueInterval = null;
+    private getMockResponse(command: string): string {
+        const [fullCommand] = command.split(':', 1);
+        switch (fullCommand) {
+            case 'SYS.PING': return 'PONG';
+            case 'SYS.INFO': return 'INFO:MOCK_FUE_SLAVE:1.0';
+            case 'PIN.SET_D': return 'OK';
+            case 'PIN.SET_A': return 'OK';
+            case 'PIN.GET_D': return 'DATA:1';
+            case 'PIN.GET_A': return 'DATA:512';
+            default: return 'ERR:INVALID_CMD';
         }
     }
 }

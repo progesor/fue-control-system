@@ -1,33 +1,49 @@
-// fue-control-system-main/backend/src/main.ts
+// backend/src/main.ts
+// TÜM SERVİSLERİ DOĞRU BAĞLAYAN NİHAİ VERSİYON
 
-import { MockCommunicationService } from './services/MockCommunicationService';
-import { SerialCommunicationService } from './services/SerialCommunicationService'; // Yeni servisi import et
-import { WebSocketServer } from './services/WebSocketServer';
+import * as fs from 'fs';
+import * as path from 'path';
 import { ICommunicationService } from './services/ICommunicationService';
-import config from '../config.json'; // config.json'ı import et
+import { SerialCommunicationService } from './services/SerialCommunicationService';
+import { MockCommunicationService } from './services/MockCommunicationService';
+import { WebSocketServer } from './services/WebSocketServer';
+// MotorControlService şimdilik kullanılmıyor, sadece temel bağlantıyı test ediyoruz.
 
-console.log("Sunucu altyapısı başlatılıyor...");
+async function main() {
+    console.log('Sunucu altyapısı başlatılıyor...');
 
-// Hangi iletişim servisini kullanacağımızı seçiyoruz.
-let commService: ICommunicationService;
+    const configPath = path.join(__dirname, '..', 'config.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
-if (config.simulationMode) {
-    console.log("Simülasyon modunda çalışılıyor.");
-    commService = new MockCommunicationService();
-} else {
-    console.log("Gerçek seri port modunda çalışılıyor.");
-    commService = new SerialCommunicationService();
+    let communicationService: ICommunicationService;
+
+    if (config.simulationMode) {
+        console.log('Simülasyon modunda çalışılıyor.');
+        // DÜZELTME: MockCommunicationService artık config'den gelen parametre ile doğru şekilde başlatılıyor.
+        communicationService = new MockCommunicationService(config.simulationData.responseDelayMs);
+    } else {
+        console.log('Gerçek seri port modunda çalışılıyor.');
+        communicationService = new SerialCommunicationService(
+            config.serial.port,
+            config.serial.options.baudRate
+        );
+    }
+
+    try {
+        await communicationService.open();
+    } catch (error) {
+        console.error('İletişim servisi başlatılamadı:', error);
+        process.exit(1);
+    }
+
+    // WebSocket sunucusunu başlat ve iletişim servisini ona enjekte et.
+    // Bu, WebSocket'in seri port ile konuşabilmesini sağlar.
+    new WebSocketServer(config.api.port, communicationService);
+
+    console.log('Uygulama başarıyla çalışıyor. İstemci bağlantısı bekleniyor...');
 }
 
-// WebSocket sunucumuzu oluşturuyoruz ve seçtiğimiz iletişim servisini
-// ona enjekte ediyoruz.
-const wsServer = new WebSocketServer(commService);
-
-// Her iki servisi de başlatıyoruz.
-commService.start().catch(err => {
-    console.error("İletişim servisi başlatılamadı:", err);
-    process.exit(1); // Servis başlamazsa uygulamayı sonlandır.
+main().catch(error => {
+    console.error('Uygulama başlatılırken kritik bir hata oluştu:', error);
+    process.exit(1);
 });
-wsServer.start();
-
-console.log("Uygulama başarıyla çalışıyor. İstemci bağlantısı bekleniyor...");

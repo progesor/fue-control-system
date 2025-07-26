@@ -1,4 +1,5 @@
 // backend/src/services/SerialCommunicationService.ts
+// Bu, "UniCom" protokolünü konuşan nihai haberleşme servisidir.
 
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
@@ -17,17 +18,17 @@ export class SerialCommunicationService implements ICommunicationService {
 
         this.port.on('open', () => {
             this.isConnected = true;
-            console.log(`Serial port ${path} opened.`);
+            console.log(`Serial port ${path} açıldı.`);
             this.parser.on('data', this.handleResponse.bind(this));
         });
 
         this.port.on('close', () => {
             this.isConnected = false;
-            console.log(`Serial port ${path} closed.`);
+            console.log(`Serial port ${path} kapandı.`);
         });
 
         this.port.on('error', (err) => {
-            console.error('Serial Port Error: ', err);
+            console.error('Seri Port Hatası: ', err);
             this.isConnected = false;
         });
     }
@@ -35,24 +36,15 @@ export class SerialCommunicationService implements ICommunicationService {
     public open(): Promise<void> {
         return new Promise((resolve, reject) => {
             this.port.open((err) => {
-                if (err) {
-                    return reject(err);
-                }
-                // Arduino'nun başlaması için kısa bir bekleme süresi
-                setTimeout(resolve, 2000);
+                if (err) return reject(err);
+                setTimeout(resolve, 2000); // Arduino'nun başlaması için bekle
             });
         });
     }
 
-    public close(): void {
-        this.port.close();
-    }
+    public close(): void { this.port.close(); }
+    public getIsConnected(): boolean { return this.isConnected; }
 
-    public getIsConnected(): boolean {
-        return this.isConnected;
-    }
-
-    // Komutları bir sıraya ekleyip tek tek işleyen daha sağlam bir yapı
     public sendCommand(command: string): Promise<string> {
         return new Promise((resolve, reject) => {
             this.commandQueue.push({ command, resolve, reject });
@@ -67,19 +59,14 @@ export class SerialCommunicationService implements ICommunicationService {
             this.isProcessing = false;
             return;
         }
-
         this.isProcessing = true;
         const { command } = this.commandQueue[0];
-
         this.port.write(`${command}\n`, (err) => {
             if (err) {
-                console.error(`Error writing to serial port: ${err.message}`);
-                // Hata durumunda sıradaki komutu reddet ve devam et
-                const nextCommand = this.commandQueue.shift();
-                if(nextCommand) {
-                    nextCommand.reject(err);
-                }
-                this.processQueue(); // Bir sonraki komuta geç
+                console.error(`Seri porta yazma hatası: ${err.message}`);
+                const nextCmd = this.commandQueue.shift();
+                if (nextCmd) nextCmd.reject(err);
+                this.processQueue();
             }
         });
     }
@@ -87,17 +74,13 @@ export class SerialCommunicationService implements ICommunicationService {
     private handleResponse(data: string) {
         const response = data.trim();
         if (this.commandQueue.length > 0) {
-            const { resolve, reject } = this.commandQueue.shift()!; // Sıradaki komutu al ve sıradan çıkar
-
+            const { resolve, reject } = this.commandQueue.shift()!;
             if (response.startsWith('ERR')) {
-                console.warn(`Arduino Error Response for command: ${response}`);
                 reject(new Error(response));
             } else {
                 resolve(response);
             }
         }
-
-        // Bir sonraki komutu işle
         this.processQueue();
     }
 }
